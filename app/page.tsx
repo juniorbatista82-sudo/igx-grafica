@@ -14,9 +14,13 @@ interface Usuario {
 
 interface Cliente {
   id: number;
-  nome: string;
-  telefone: string;
-  email: string;
+  nome: string;      // Nome / Empresa
+  telefone: string;  // Telefone / WhatsApp
+  cnpj: string;      // CNPJ
+  rg: string;        // RG
+  contato: string;   // Contato (Nome da pessoa de contato)
+  email: string;     // E-mail
+  endereco: string;  // Endereço completo
 }
 
 interface OrdemServico {
@@ -96,10 +100,14 @@ export default function Home() {
   const [quantidade, setQuantidade] = useState<number>(10);
   const [precoUnidade, setPrecoUnidade] = useState<number>(50);
 
-  // Form Cliente
-  const [novoNome, setNovoNome] = useState('');
-  const [novoTel, setNovoTel] = useState('');
-  const [novoEmail, setNovoEmail] = useState('');
+  // Form Cliente Completo
+  const [cliNome, setCliNome] = useState('');
+  const [cliTel, setCliTel] = useState('');
+  const [cliCnpj, setCliCnpj] = useState('');
+  const [cliRg, setCliRg] = useState('');
+  const [cliContato, setCliContato] = useState('');
+  const [cliEmail, setCliEmail] = useState('');
+  const [cliEndereco, setCliEndereco] = useState('');
 
   // Carregar dados salvos ao iniciar
   useEffect(() => {
@@ -173,6 +181,39 @@ export default function Home() {
       setPermSel(permSel.filter(item => item !== p));
     } else {
       setPermSel([...permSel, p]);
+    }
+  };
+
+  // Funções do Cliente
+  const handleCadastrarCliente = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cliNome) return alert('Por favor, informe o Nome ou Empresa!');
+
+    const novoCliente: Cliente = {
+      id: Date.now(),
+      nome: cliNome,
+      telefone: cliTel,
+      cnpj: cliCnpj,
+      rg: cliRg,
+      contato: cliContato,
+      email: cliEmail,
+      endereco: cliEndereco
+    };
+
+    setClientes([...clientes, novoCliente]);
+    setCliNome('');
+    setCliTel('');
+    setCliCnpj('');
+    setCliRg('');
+    setCliContato('');
+    setCliEmail('');
+    setCliEndereco('');
+    alert('Cliente cadastrado com sucesso na IGX Gráfica!');
+  };
+
+  const removerCliente = (id: number) => {
+    if (confirm('Deseja realmente excluir este cliente?')) {
+      setClientes(clientes.filter(c => c.id !== id));
     }
   };
 
@@ -281,18 +322,9 @@ export default function Home() {
     setPermSel(['pedidos', 'clientes']);
   };
 
-  // Demais Ações do Sistema
-  const handleCadastrarCliente = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!novoNome) return;
-    setClientes([...clientes, { id: Date.now(), nome: novoNome, telefone: novoTel, email: novoEmail }]);
-    setNovoNome(''); setNovoTel(''); setNovoEmail('');
-    alert('Cliente cadastrado!');
-  };
-
   const handleGerarOS = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clienteSel) return alert('Selecione um cliente!');
+    if (!clienteSel) return alert('Selecione ou informe um cliente!');
 
     const areaTotal = largura * altura;
     const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
@@ -466,15 +498,15 @@ export default function Home() {
                 <p className="text-2xl font-black text-red-700 mt-2">{insumosCriticos.length} itens</p>
               </div>
               <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Pedidos em Aberto</p>
-                <p className="text-2xl font-black text-amber-950 mt-2">{ordens.filter(o => o.status === 'Aberto').length}</p>
+                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Clientes Cadastrados</p>
+                <p className="text-2xl font-black text-amber-950 mt-2">{clientes.length}</p>
               </div>
             </div>
 
             <div className="bg-amber-100/90 border border-black/20 rounded-2xl p-6 shadow-lg">
               <h3 className="text-lg font-black text-black mb-2">Painel de Controle - IGX Gráfica</h3>
               <p className="text-black/80 text-sm font-medium leading-relaxed">
-                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar o estoque com alerta de reposição e visualizar o fluxo financeiro.
+                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes com CNPJ/RG/Endereço, controlar o estoque e visualizar o fluxo financeiro.
               </p>
             </div>
           </div>
@@ -487,9 +519,33 @@ export default function Home() {
               <h2 className="text-lg font-black border-b border-black/20 pb-3 text-black">Novo Pedido / Orçamento</h2>
               <form onSubmit={handleGerarOS} className="space-y-4 text-sm">
                 <div>
-                  <label className="block mb-1 font-extrabold text-black">Cliente</label>
-                  <input type="text" placeholder="Nome do cliente" value={clienteSel} onChange={e => setClienteSel(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                  <label className="block mb-1 font-extrabold text-black">Selecionar ou Digitar Cliente</label>
+                  
+                  {/* Se houver clientes cadastrados, oferece a lista suspensa */}
+                  {clientes.length > 0 ? (
+                    <select 
+                      value={clienteSel} 
+                      onChange={e => setClienteSel(e.target.value)}
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold outline-none focus:border-black"
+                    >
+                      <option value="">-- Selecione o Cliente --</option>
+                      {clientes.map(c => (
+                        <option key={c.id} value={c.nome}>
+                          {c.nome} {c.cnpj ? `(CNPJ: ${c.cnpj})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input 
+                      type="text" 
+                      placeholder="Nome do cliente" 
+                      value={clienteSel} 
+                      onChange={e => setClienteSel(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  )}
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block mb-1 font-extrabold text-black">Produto</label>
@@ -505,6 +561,7 @@ export default function Home() {
                     <input type="number" min="1" value={quantidade} onChange={e => setQuantidade(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
                 </div>
+
                 {(tipoProduto === 'lona' || tipoProduto === 'adesivo') && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -517,14 +574,17 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
                 <div>
                   <label className="block mb-1 font-extrabold text-black">Preço Unitário / m² (R$)</label>
                   <input type="number" step="0.01" value={precoUnidade} onChange={e => setPrecoUnidade(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
+
                 <div className="bg-black text-amber-400 p-4 rounded-xl flex justify-between items-center shadow-md">
                   <span className="font-bold text-amber-200">Total:</span>
                   <span className="text-xl font-black text-amber-400">R$ {valorTotalOrçamento.toFixed(2)}</span>
                 </div>
+
                 <button type="submit" className="w-full bg-black text-amber-400 font-black py-3.5 rounded-xl transition shadow-xl border border-amber-400/30">
                   Gerar Pedido IGX
                 </button>
@@ -582,82 +642,159 @@ export default function Home() {
           </div>
         )}
 
-        {/* 3. CLIENTES */}
+        {/* 3. CADASTRO DE CLIENTES COMPLETO */}
         {abaAtiva === 'clientes' && temPermissao('clientes') && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Form de Cadastro de Cliente */}
             <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Novo Cliente</h2>
+              <h2 className="text-lg font-black text-black">Cadastrar Novo Cliente</h2>
+              
               <form onSubmit={handleCadastrarCliente} className="space-y-3 text-sm">
                 <div>
-                  <label className="block mb-1 text-black font-extrabold">Nome / Empresa</label>
-                  <input type="text" required value={novoNome} onChange={e => setNovoNome(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Telefone</label>
-                  <input type="text" value={novoTel} onChange={e => setNovoTel(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">E-mail</label>
-                  <input type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl">Cadastrar Cliente</button>
-              </form>
-            </div>
-
-            <div className="md:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Clientes ({clientes.length})</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {clientes.map(c => (
-                  <div key={c.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-1">
-                    <p className="font-black text-black">{c.nome}</p>
-                    <p className="text-xs text-black/70 font-semibold">Tel: {c.telefone || 'N/A'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 4. ESTOQUE & INSUMOS COM ALERTA E VALORES */}
-        {abaAtiva === 'estoque' && temPermissao('estoque') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Form de Cadastro de Insumo */}
-            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Cadastrar Item no Estoque</h2>
-              
-              <form onSubmit={handleCadastrarInsumo} className="space-y-4 text-sm">
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Nome do Insumo / Material</label>
+                  <label className="block mb-1 text-black font-extrabold">Nome Completo / Empresa *</label>
                   <input 
                     type="text" 
                     required 
-                    placeholder="Ex: Tinta Eco-Solvente Magenta"
-                    value={nomeInsumo} 
-                    onChange={e => setNomeInsumo(e.target.value)} 
+                    placeholder="Ex: Empresa Exemplo Ltda / João Silva"
+                    value={cliNome} 
+                    onChange={e => setCliNome(e.target.value)} 
                     className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block mb-1 text-black font-extrabold">Quantidade Inicial</label>
+                    <label className="block mb-1 text-black font-extrabold">CNPJ</label>
                     <input 
-                      type="number" 
-                      min="0"
-                      value={qtdInsumo} 
-                      onChange={e => setQtdInsumo(Number(e.target.value))} 
+                      type="text" 
+                      placeholder="00.000.000/0001-00"
+                      value={cliCnpj} 
+                      onChange={e => setCliCnpj(e.target.value)} 
                       className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
                     />
                   </div>
 
                   <div>
+                    <label className="block mb-1 text-black font-extrabold">RG / IE</label>
+                    <input 
+                      type="text" 
+                      placeholder="00.000.000-0"
+                      value={cliRg} 
+                      onChange={e => setCliRg(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Telefone / Whats</label>
+                    <input 
+                      type="text" 
+                      placeholder="(00) 00000-0000"
+                      value={cliTel} 
+                      onChange={e => setCliTel(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Pessoa de Contato</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Carlos (Gerente)"
+                      value={cliContato} 
+                      onChange={e => setCliContato(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-black font-extrabold">E-mail</label>
+                  <input 
+                    type="email" 
+                    placeholder="cliente@email.com"
+                    value={cliEmail} 
+                    onChange={e => setCliEmail(e.target.value)} 
+                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-black font-extrabold">Endereço Completo</label>
+                  <input 
+                    type="text" 
+                    placeholder="Rua, Número, Bairro, Cidade - UF"
+                    value={cliEndereco} 
+                    onChange={e => setCliEndereco(e.target.value)} 
+                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                  />
+                </div>
+
+                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
+                  Cadastrar Cliente
+                </button>
+              </form>
+            </div>
+
+            {/* Listagem Detalhada de Clientes */}
+            <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
+              <h2 className="text-lg font-black text-black">Base de Clientes ({clientes.length})</h2>
+              
+              {clientes.length === 0 ? (
+                <p className="text-black/60 text-sm font-semibold">Nenhum cliente cadastrado ainda.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {clientes.map(c => (
+                    <div key={c.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-2 shadow-sm relative">
+                      <div className="flex justify-between items-start border-b border-black/10 pb-2">
+                        <div>
+                          <p className="font-black text-black text-base">{c.nome}</p>
+                          {c.contato && <p className="text-xs text-black/70 font-bold">Contato: {c.contato}</p>}
+                        </div>
+                        <button 
+                          onClick={() => removerCliente(c.id)}
+                          className="text-red-600 hover:text-red-800 font-bold text-xs"
+                          title="Remover cliente"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-1 text-xs text-black/80 font-semibold">
+                        {c.cnpj && <p><span className="font-black text-black">CNPJ:</span> {c.cnpj}</p>}
+                        {c.rg && <p><span className="font-black text-black">RG/IE:</span> {c.rg}</p>}
+                        {c.telefone && <p><span className="font-black text-black">Tel/Whats:</span> {c.telefone}</p>}
+                        {c.email && <p><span className="font-black text-black">E-mail:</span> {c.email}</p>}
+                        {c.endereco && <p><span className="font-black text-black">Endereço:</span> {c.endereco}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. ESTOQUE */}
+        {abaAtiva === 'estoque' && temPermissao('estoque') && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
+              <h2 className="text-lg font-black text-black">Cadastrar Item no Estoque</h2>
+              <form onSubmit={handleCadastrarInsumo} className="space-y-4 text-sm">
+                <div>
+                  <label className="block mb-1 text-black font-extrabold">Nome do Insumo / Material</label>
+                  <input type="text" required placeholder="Ex: Tinta Eco-Solvente Magenta" value={nomeInsumo} onChange={e => setNomeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Quantidade Inicial</label>
+                    <input type="number" min="0" value={qtdInsumo} onChange={e => setQtdInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                  </div>
+                  <div>
                     <label className="block mb-1 text-black font-extrabold">Unidade</label>
-                    <select 
-                      value={unidadeInsumo} 
-                      onChange={e => setUnidadeInsumo(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold"
-                    >
+                    <select value={unidadeInsumo} onChange={e => setUnidadeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold">
                       <option value="m">Metros (m)</option>
                       <option value="m²">Metros Quadrados (m²)</option>
                       <option value="folhas">Folhas</option>
@@ -667,45 +804,28 @@ export default function Home() {
                     </select>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Preço Custo Unit. (R$)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      value={precoUnitInsumo} 
-                      onChange={e => setPrecoUnitInsumo(Number(e.target.value))} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="number" step="0.01" value={precoUnitInsumo} onChange={e => setPrecoUnitInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
-
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Mínimo (Alerta)</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={minInsumo} 
-                      onChange={e => setMinInsumo(Number(e.target.value))} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="number" min="1" value={minInsumo} onChange={e => setMinInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
                 </div>
-
                 <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
                   Salvar no Estoque
                 </button>
               </form>
             </div>
 
-            {/* Listagem de Estoque e Alertas de Reposição */}
             <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-black/20 pb-3">
                 <div>
                   <h2 className="text-lg font-black text-black">Itens em Estoque ({insumos.length})</h2>
                   <p className="text-xs text-black/70 font-bold">Valor Total Investido: <span className="text-black font-black">R$ {valorTotalEstoque.toFixed(2)}</span></p>
                 </div>
-
                 {insumosCriticos.length > 0 && (
                   <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-xl animate-pulse shadow">
                     ⚠️ {insumosCriticos.length} item(ns) precisam de REPOSIÇÃO!
@@ -719,63 +839,35 @@ export default function Home() {
                   const valorTotalItem = item.quantidade * item.precoUnitario;
 
                   return (
-                    <div 
-                      key={item.id} 
-                      className={`p-4 rounded-2xl border space-y-3 transition-all ${
-                        precisaRepor 
-                          ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' 
-                          : 'bg-amber-50 border-black/20 shadow-sm'
-                      }`}
-                    >
+                    <div key={item.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${precisaRepor ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' : 'bg-amber-50 border-black/20 shadow-sm'}`}>
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-black text-black text-base">{item.nome}</p>
                           <p className="text-[11px] font-bold text-black/60">Custo un: R$ {item.precoUnitario.toFixed(2)} / {item.unidade}</p>
                         </div>
-
                         {precisaRepor ? (
-                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                            Repor Estoque
-                          </span>
+                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Repor Estoque</span>
                         ) : (
-                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                            OK
-                          </span>
+                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">OK</span>
                         )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
                         <div>
                           <span className="text-black/60 font-bold block text-[10px]">QTD ATUAL:</span>
-                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>
-                            {item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span>
-                          </span>
+                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>{item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span></span>
                         </div>
                         <div className="text-right">
                           <span className="text-black/60 font-bold block text-[10px]">TOTAL EM DINHEIRO:</span>
-                          <span className="text-sm font-black text-black">
-                            R$ {valorTotalItem.toFixed(2)}
-                          </span>
+                          <span className="text-sm font-black text-black">R$ {valorTotalItem.toFixed(2)}</span>
                         </div>
                       </div>
 
                       <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
                         <span>Mínimo seguro: {item.minimo} {item.unidade}</span>
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => ajustarEstoqueRapido(item.id)}
-                            className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition"
-                            title="Entrada ou saída de estoque"
-                          >
-                            + / -
-                          </button>
-                          <button 
-                            onClick={() => removerInsumo(item.id)}
-                            className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition"
-                            title="Remover item"
-                          >
-                            ✕
-                          </button>
+                          <button onClick={() => ajustarEstoqueRapido(item.id)} className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition" title="Entrada ou saída de estoque">+ / -</button>
+                          <button onClick={() => removerInsumo(item.id)} className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition" title="Remover item">✕</button>
                         </div>
                       </div>
                     </div>
@@ -783,7 +875,6 @@ export default function Home() {
                 })}
               </div>
             </div>
-
           </div>
         )}
 
@@ -834,13 +925,7 @@ export default function Home() {
                   <label className="block mb-1 text-black font-extrabold">
                     {editandoId ? 'Nova Senha (deixe em branco p/ não alterar)' : 'Senha de Acesso'}
                   </label>
-                  <input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={senhaUser} 
-                    onChange={e => setSenhaUser(e.target.value)} 
-                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                  />
+                  <input type="password" placeholder="••••••••" value={senhaUser} onChange={e => setSenhaUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
 
                 <div>
@@ -903,18 +988,8 @@ export default function Home() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10">
-                      <button 
-                        onClick={() => iniciarEdicao(u)}
-                        className="bg-black text-amber-400 hover:bg-neutral-900 text-xs font-bold py-1.5 rounded-lg transition"
-                      >
-                        Editar Perfil
-                      </button>
-                      <button 
-                        onClick={() => redefinirSenhaRapida(u)}
-                        className="bg-amber-600/30 hover:bg-amber-600 text-black text-xs font-bold py-1.5 rounded-lg border border-black/20 transition"
-                      >
-                        Redefinir Senha
-                      </button>
+                      <button onClick={() => iniciarEdicao(u)} className="bg-black text-amber-400 hover:bg-neutral-900 text-xs font-bold py-1.5 rounded-lg transition">Editar Perfil</button>
+                      <button onClick={() => redefinirSenhaRapida(u)} className="bg-amber-600/30 hover:bg-amber-600 text-black text-xs font-bold py-1.5 rounded-lg border border-black/20 transition">Redefinir Senha</button>
                     </div>
                   </div>
                 ))}
