@@ -38,7 +38,9 @@ interface Insumo {
   nome: string;
   quantidade: number;
   unidade: string;
-  precoUnitario: number;
+  precoCusto: number;
+  precoVenda: number;
+  margemLucro: number;
   minimo: number;
 }
 
@@ -85,11 +87,13 @@ export default function Home() {
   const [cargoUser, setCargoUser] = useState('Atendente');
   const [permSel, setPermSel] = useState<Permissao[]>(['pedidos', 'clientes']);
 
-  // Form de Estoque
+  // Form de Estoque Completo
   const [nomeInsumo, setNomeInsumo] = useState('');
   const [qtdInsumo, setQtdInsumo] = useState<number>(10);
-  const [unidadeInsumo, setUnidadeInsumo] = useState('m²');
-  const [precoUnitInsumo, setPrecoUnitInsumo] = useState<number>(15);
+  const [unidadeInsumo, setUnidadeInsumo] = useState('unidade');
+  const [precoCustoInsumo, setPrecoCustoInsumo] = useState<number>(10);
+  const [precoVendaInsumo, setPrecoVendaInsumo] = useState<number>(20);
+  const [margemLucroInsumo, setMargemLucroInsumo] = useState<number>(100);
   const [minInsumo, setMinInsumo] = useState<number>(5);
 
   // Form Orçamento
@@ -128,9 +132,9 @@ export default function Home() {
       const i = localStorage.getItem('igx_insumos');
       if (i) setInsumos(JSON.parse(i)); else {
         const defInsumos: Insumo[] = [
-          { id: 1, nome: 'Bobina Lona 440g', quantidade: 50, unidade: 'm', precoUnitario: 18.50, minimo: 10 },
-          { id: 2, nome: 'Adesivo Vinil Brilho', quantidade: 20, unidade: 'm', precoUnitario: 12.00, minimo: 5 },
-          { id: 3, nome: 'Papel Couché 150g A4', quantidade: 2000, unidade: 'folhas', precoUnitario: 0.25, minimo: 500 }
+          { id: 1, nome: 'Bobina Lona 440g', quantidade: 50, unidade: 'm', precoCusto: 18.50, precoVenda: 35.00, margemLucro: 89.18, minimo: 10 },
+          { id: 2, nome: 'Papel Couché 150g A4', quantidade: 10, unidade: 'resma', precoCusto: 45.00, precoVenda: 90.00, margemLucro: 100.00, minimo: 2 },
+          { id: 3, nome: 'Caixa de Canetas Personalizadas', quantidade: 5, unidade: 'caixa', precoCusto: 120.00, precoVenda: 250.00, margemLucro: 108.33, minimo: 2 }
         ];
         setInsumos(defInsumos);
       }
@@ -146,6 +150,24 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('igx_ordens', JSON.stringify(ordens)); }, [ordens]);
   useEffect(() => { localStorage.setItem('igx_insumos', JSON.stringify(insumos)); }, [insumos]);
   useEffect(() => { localStorage.setItem('igx_financeiro', JSON.stringify(financeiro)); }, [financeiro]);
+
+  // Recalcular margem de lucro quando o custo ou venda mudarem no form de estoque
+  const handleAtualizarPrecosEstoque = (custo: number, venda: number) => {
+    setPrecoCustoInsumo(custo);
+    setPrecoVendaInsumo(venda);
+    if (custo > 0) {
+      const margem = ((venda - custo) / custo) * 100;
+      setMargemLucroInsumo(Number(margem.toFixed(2)));
+    }
+  };
+
+  const handleAtualizarMargemLucro = (margem: number) => {
+    setMargemLucroInsumo(margem);
+    if (precoCustoInsumo > 0) {
+      const novaVenda = precoCustoInsumo + (precoCustoInsumo * (margem / 100));
+      setPrecoVendaInsumo(Number(novaVenda.toFixed(2)));
+    }
+  };
 
   // Login e Logout
   const handleLogin = (e: React.FormEvent) => {
@@ -220,23 +242,27 @@ export default function Home() {
   // Funções do Estoque
   const handleCadastrarInsumo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nomeInsumo) return alert('Informe o nome do insumo!');
+    if (!nomeInsumo) return alert('Informe o nome do produto no estoque!');
 
     const novo: Insumo = {
       id: Date.now(),
       nome: nomeInsumo,
       quantidade: Number(qtdInsumo),
       unidade: unidadeInsumo,
-      precoUnitario: Number(precoUnitInsumo),
+      precoCusto: Number(precoCustoInsumo),
+      precoVenda: Number(precoVendaInsumo),
+      margemLucro: Number(margemLucroInsumo),
       minimo: Number(minInsumo)
     };
 
     setInsumos([...insumos, novo]);
     setNomeInsumo('');
     setQtdInsumo(10);
-    setPrecoUnitInsumo(15);
+    setPrecoCustoInsumo(10);
+    setPrecoVendaInsumo(20);
+    setMargemLucroInsumo(100);
     setMinInsumo(5);
-    alert('Item cadastrado no estoque!');
+    alert('Produto/Insumo cadastrado no estoque!');
   };
 
   const ajustarEstoqueRapido = (id: number) => {
@@ -361,7 +387,7 @@ export default function Home() {
   const saldoFinanceiro = totalEntradas - financeiro.filter(x => x.tipo === 'Saida').reduce((acc, curr) => acc + curr.valor, 0);
 
   // Valor Total Investido em Estoque
-  const valorTotalEstoque = insumos.reduce((acc, curr) => acc + (curr.quantidade * curr.precoUnitario), 0);
+  const valorTotalEstoque = insumos.reduce((acc, curr) => acc + (curr.quantidade * curr.precoCusto), 0);
   const insumosCriticos = insumos.filter(i => i.quantidade <= i.minimo);
 
   // TELA DE LOGIN
@@ -490,7 +516,7 @@ export default function Home() {
                 <p className="text-2xl font-black text-emerald-800 mt-2">R$ {totalEntradas.toFixed(2)}</p>
               </div>
               <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Valor em Estoque</p>
+                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Valor Investido em Estoque</p>
                 <p className="text-2xl font-black text-amber-900 mt-2">R$ {valorTotalEstoque.toFixed(2)}</p>
               </div>
               <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
@@ -506,7 +532,7 @@ export default function Home() {
             <div className="bg-amber-100/90 border border-black/20 rounded-2xl p-6 shadow-lg">
               <h3 className="text-lg font-black text-black mb-2">Painel de Controle - IGX Gráfica</h3>
               <p className="text-black/80 text-sm font-medium leading-relaxed">
-                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes com CNPJ/RG/Endereço, controlar o estoque e visualizar o fluxo financeiro.
+                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes, controlar o estoque com cálculo automático de margem de lucro e visualizar o fluxo financeiro.
               </p>
             </div>
           </div>
@@ -520,8 +546,6 @@ export default function Home() {
               <form onSubmit={handleGerarOS} className="space-y-4 text-sm">
                 <div>
                   <label className="block mb-1 font-extrabold text-black">Selecionar ou Digitar Cliente</label>
-                  
-                  {/* Se houver clientes cadastrados, oferece a lista suspensa */}
                   {clientes.length > 0 ? (
                     <select 
                       value={clienteSel} 
@@ -645,91 +669,45 @@ export default function Home() {
         {/* 3. CADASTRO DE CLIENTES COMPLETO */}
         {abaAtiva === 'clientes' && temPermissao('clientes') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Form de Cadastro de Cliente */}
             <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
               <h2 className="text-lg font-black text-black">Cadastrar Novo Cliente</h2>
               
               <form onSubmit={handleCadastrarCliente} className="space-y-3 text-sm">
                 <div>
                   <label className="block mb-1 text-black font-extrabold">Nome Completo / Empresa *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="Ex: Empresa Exemplo Ltda / João Silva"
-                    value={cliNome} 
-                    onChange={e => setCliNome(e.target.value)} 
-                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                  />
+                  <input type="text" required placeholder="Ex: Empresa Exemplo Ltda / João Silva" value={cliNome} onChange={e => setCliNome(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block mb-1 text-black font-extrabold">CNPJ</label>
-                    <input 
-                      type="text" 
-                      placeholder="00.000.000/0001-00"
-                      value={cliCnpj} 
-                      onChange={e => setCliCnpj(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="text" placeholder="00.000.000/0001-00" value={cliCnpj} onChange={e => setCliCnpj(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
-
                   <div>
                     <label className="block mb-1 text-black font-extrabold">RG / IE</label>
-                    <input 
-                      type="text" 
-                      placeholder="00.000.000-0"
-                      value={cliRg} 
-                      onChange={e => setCliRg(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="text" placeholder="00.000.000-0" value={cliRg} onChange={e => setCliRg(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Telefone / Whats</label>
-                    <input 
-                      type="text" 
-                      placeholder="(00) 00000-0000"
-                      value={cliTel} 
-                      onChange={e => setCliTel(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="text" placeholder="(00) 00000-0000" value={cliTel} onChange={e => setCliTel(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
-
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Pessoa de Contato</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Carlos (Gerente)"
-                      value={cliContato} 
-                      onChange={e => setCliContato(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
+                    <input type="text" placeholder="Ex: Carlos (Gerente)" value={cliContato} onChange={e => setCliContato(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                   </div>
                 </div>
 
                 <div>
                   <label className="block mb-1 text-black font-extrabold">E-mail</label>
-                  <input 
-                    type="email" 
-                    placeholder="cliente@email.com"
-                    value={cliEmail} 
-                    onChange={e => setCliEmail(e.target.value)} 
-                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                  />
+                  <input type="email" placeholder="cliente@email.com" value={cliEmail} onChange={e => setCliEmail(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
 
                 <div>
                   <label className="block mb-1 text-black font-extrabold">Endereço Completo</label>
-                  <input 
-                    type="text" 
-                    placeholder="Rua, Número, Bairro, Cidade - UF"
-                    value={cliEndereco} 
-                    onChange={e => setCliEndereco(e.target.value)} 
-                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                  />
+                  <input type="text" placeholder="Rua, Número, Bairro, Cidade - UF" value={cliEndereco} onChange={e => setCliEndereco(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
 
                 <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
@@ -738,10 +716,8 @@ export default function Home() {
               </form>
             </div>
 
-            {/* Listagem Detalhada de Clientes */}
             <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
               <h2 className="text-lg font-black text-black">Base de Clientes ({clientes.length})</h2>
-              
               {clientes.length === 0 ? (
                 <p className="text-black/60 text-sm font-semibold">Nenhum cliente cadastrado ainda.</p>
               ) : (
@@ -753,13 +729,7 @@ export default function Home() {
                           <p className="font-black text-black text-base">{c.nome}</p>
                           {c.contato && <p className="text-xs text-black/70 font-bold">Contato: {c.contato}</p>}
                         </div>
-                        <button 
-                          onClick={() => removerCliente(c.id)}
-                          className="text-red-600 hover:text-red-800 font-bold text-xs"
-                          title="Remover cliente"
-                        >
-                          ✕
-                        </button>
+                        <button onClick={() => removerCliente(c.id)} className="text-red-600 hover:text-red-800 font-bold text-xs" title="Remover cliente">✕</button>
                       </div>
 
                       <div className="space-y-1 text-xs text-black/80 font-semibold">
@@ -777,58 +747,122 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. ESTOQUE */}
+        {/* 4. ESTOQUE DE PRODUTOS COMPLETO */}
         {abaAtiva === 'estoque' && temPermissao('estoque') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Form de Cadastro de Produto no Estoque */}
             <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Cadastrar Item no Estoque</h2>
+              <h2 className="text-lg font-black text-black">Cadastrar Produto no Estoque</h2>
+              
               <form onSubmit={handleCadastrarInsumo} className="space-y-4 text-sm">
                 <div>
-                  <label className="block mb-1 text-black font-extrabold">Nome do Insumo / Material</label>
-                  <input type="text" required placeholder="Ex: Tinta Eco-Solvente Magenta" value={nomeInsumo} onChange={e => setNomeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                  <label className="block mb-1 text-black font-extrabold">Produto / Material *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Ex: Papel Couché 150g A4 / Lona 440g"
+                    value={nomeInsumo} 
+                    onChange={e => setNomeInsumo(e.target.value)} 
+                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                  />
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Quantidade Inicial</label>
-                    <input type="number" min="0" value={qtdInsumo} onChange={e => setQtdInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={qtdInsumo} 
+                      onChange={e => setQtdInsumo(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
                   </div>
+
                   <div>
                     <label className="block mb-1 text-black font-extrabold">Unidade</label>
-                    <select value={unidadeInsumo} onChange={e => setUnidadeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold">
+                    <select 
+                      value={unidadeInsumo} 
+                      onChange={e => setUnidadeInsumo(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold"
+                    >
+                      <option value="unidade">Unidade (un)</option>
+                      <option value="resma">Resma</option>
+                      <option value="caixa">Caixa</option>
                       <option value="m">Metros (m)</option>
                       <option value="m²">Metros Quadrados (m²)</option>
                       <option value="folhas">Folhas</option>
                       <option value="litros">Litros (L)</option>
-                      <option value="unidades">Unidades (un)</option>
-                      <option value="caixas">Caixas</option>
                     </select>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block mb-1 text-black font-extrabold">Preço Custo Unit. (R$)</label>
-                    <input type="number" step="0.01" value={precoUnitInsumo} onChange={e => setPrecoUnitInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                    <label className="block mb-1 text-black font-extrabold">Preço de Custo (R$)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={precoCustoInsumo} 
+                      onChange={e => handleAtualizarPrecosEstoque(Number(e.target.value), precoVendaInsumo)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
                   </div>
+
                   <div>
-                    <label className="block mb-1 text-black font-extrabold">Mínimo (Alerta)</label>
-                    <input type="number" min="1" value={minInsumo} onChange={e => setMinInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
+                    <label className="block mb-1 text-black font-extrabold">Preço de Venda (R$)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={precoVendaInsumo} 
+                      onChange={e => handleAtualizarPrecosEstoque(precoCustoInsumo, Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Margem de Lucro (%)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={margemLucroInsumo} 
+                      onChange={e => handleAtualizarMargemLucro(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Mínimo (Alerta)</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      value={minInsumo} 
+                      onChange={e => setMinInsumo(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+                </div>
+
                 <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
-                  Salvar no Estoque
+                  Salvar Produto no Estoque
                 </button>
               </form>
             </div>
 
+            {/* Listagem de Produtos no Estoque e Alertas */}
             <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-black/20 pb-3">
                 <div>
-                  <h2 className="text-lg font-black text-black">Itens em Estoque ({insumos.length})</h2>
-                  <p className="text-xs text-black/70 font-bold">Valor Total Investido: <span className="text-black font-black">R$ {valorTotalEstoque.toFixed(2)}</span></p>
+                  <h2 className="text-lg font-black text-black">Produtos no Estoque ({insumos.length})</h2>
+                  <p className="text-xs text-black/70 font-bold">Valor Total em Custo: <span className="text-black font-black">R$ {valorTotalEstoque.toFixed(2)}</span></p>
                 </div>
+
                 {insumosCriticos.length > 0 && (
                   <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-xl animate-pulse shadow">
-                    ⚠️ {insumosCriticos.length} item(ns) precisam de REPOSIÇÃO!
+                    ⚠️ {insumosCriticos.length} produto(s) precisam de REPOSIÇÃO!
                   </div>
                 )}
               </div>
@@ -836,38 +870,69 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {insumos.map(item => {
                   const precisaRepor = item.quantidade <= item.minimo;
-                  const valorTotalItem = item.quantidade * item.precoUnitario;
+                  const valorTotalCusto = item.quantidade * item.precoCusto;
 
                   return (
-                    <div key={item.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${precisaRepor ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' : 'bg-amber-50 border-black/20 shadow-sm'}`}>
+                    <div 
+                      key={item.id} 
+                      className={`p-4 rounded-2xl border space-y-3 transition-all ${
+                        precisaRepor 
+                          ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' 
+                          : 'bg-amber-50 border-black/20 shadow-sm'
+                      }`}
+                    >
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-black text-black text-base">{item.nome}</p>
-                          <p className="text-[11px] font-bold text-black/60">Custo un: R$ {item.precoUnitario.toFixed(2)} / {item.unidade}</p>
+                          <p className="text-[11px] font-bold text-black/70">
+                            Custo: R$ {item.precoCusto.toFixed(2)} | Venda: R$ {item.precoVenda.toFixed(2)}
+                          </p>
                         </div>
+
                         {precisaRepor ? (
-                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Repor Estoque</span>
+                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                            Repor Estoque
+                          </span>
                         ) : (
-                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">OK</span>
+                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                            OK
+                          </span>
                         )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
                         <div>
-                          <span className="text-black/60 font-bold block text-[10px]">QTD ATUAL:</span>
-                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>{item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span></span>
+                          <span className="text-black/60 font-bold block text-[10px]">QUANTIDADE ATUAL:</span>
+                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>
+                            {item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span>
+                          </span>
                         </div>
                         <div className="text-right">
-                          <span className="text-black/60 font-bold block text-[10px]">TOTAL EM DINHEIRO:</span>
-                          <span className="text-sm font-black text-black">R$ {valorTotalItem.toFixed(2)}</span>
+                          <span className="text-black/60 font-bold block text-[10px]">MARGEM DE LUCRO:</span>
+                          <span className="text-sm font-black text-emerald-800 block">
+                            +{item.margemLucro.toFixed(1)}%
+                          </span>
+                          <span className="text-[10px] text-black/60 font-bold">Investido: R$ {valorTotalCusto.toFixed(2)}</span>
                         </div>
                       </div>
 
                       <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
-                        <span>Mínimo seguro: {item.minimo} {item.unidade}</span>
+                        <span>Min. Reposição: {item.minimo} {item.unidade}</span>
                         <div className="flex gap-2">
-                          <button onClick={() => ajustarEstoqueRapido(item.id)} className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition" title="Entrada ou saída de estoque">+ / -</button>
-                          <button onClick={() => removerInsumo(item.id)} className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition" title="Remover item">✕</button>
+                          <button 
+                            onClick={() => ajustarEstoqueRapido(item.id)}
+                            className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition"
+                            title="Entrada ou saída de estoque"
+                          >
+                            + / -
+                          </button>
+                          <button 
+                            onClick={() => removerInsumo(item.id)}
+                            className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition"
+                            title="Remover item"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -875,6 +940,7 @@ export default function Home() {
                 })}
               </div>
             </div>
+
           </div>
         )}
 
