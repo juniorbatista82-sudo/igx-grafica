@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-// Tipos de Permissões
 type Permissao = 'dashboard' | 'pedidos' | 'clientes' | 'estoque' | 'financeiro' | 'usuarios';
 
 interface Usuario {
   id: number;
   nome: string;
   email: string;
+  senha: string;
   cargo: string;
   permissoes: Permissao[];
 }
@@ -34,6 +34,7 @@ interface Insumo {
   nome: string;
   quantidade: number;
   unidade: string;
+  precoUnitario: number;
   minimo: number;
 }
 
@@ -45,24 +46,47 @@ interface FinanceiroItem {
   data: string;
 }
 
+const ADMIN_DEFAULT: Usuario = {
+  id: 1,
+  nome: 'Administrador IGX',
+  email: 'admin@igxgrafica.com',
+  senha: 'admin123',
+  cargo: 'Administrador Master',
+  permissoes: ['dashboard', 'pedidos', 'clientes', 'estoque', 'financeiro', 'usuarios']
+};
+
 export default function Home() {
-  // Usuário Ativo
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [usuarioAtual, setUsuarioAtual] = useState<Usuario | null>(null);
+  // Estado de Autenticação / Login
+  const [usuarios, setUsuarios] = useState<Usuario[]>([ADMIN_DEFAULT]);
+  const [usuarioLogado, setUsuarioLogado] = useState<Usuario | null>(null);
+  
+  // Form de Login
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginSenha, setLoginSenha] = useState('');
+  const [erroLogin, setErroLogin] = useState('');
 
   const [abaAtiva, setAbaAtiva] = useState<Permissao>('dashboard');
 
-  // Estados do Sistema
+  // Estados dos Dados do Sistema
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([]);
 
-  // Form de Novo Usuário
+  // Form de Novo/Edição de Usuário
+  const [editandoId, setEditandoId] = useState<number | null>(null);
   const [nomeUser, setNomeUser] = useState('');
   const [emailUser, setEmailUser] = useState('');
+  const [senhaUser, setSenhaUser] = useState('');
   const [cargoUser, setCargoUser] = useState('Atendente');
   const [permSel, setPermSel] = useState<Permissao[]>(['pedidos', 'clientes']);
+
+  // Form de Estoque
+  const [nomeInsumo, setNomeInsumo] = useState('');
+  const [qtdInsumo, setQtdInsumo] = useState<number>(10);
+  const [unidadeInsumo, setUnidadeInsumo] = useState('m²');
+  const [precoUnitInsumo, setPrecoUnitInsumo] = useState<number>(15);
+  const [minInsumo, setMinInsumo] = useState<number>(5);
 
   // Form Orçamento
   const [clienteSel, setClienteSel] = useState<string>('');
@@ -77,38 +101,35 @@ export default function Home() {
   const [novoTel, setNovoTel] = useState('');
   const [novoEmail, setNovoEmail] = useState('');
 
-  // Carregar dados salvos
+  // Carregar dados salvos ao iniciar
   useEffect(() => {
-    const u = localStorage.getItem('igx_usuarios');
-    if (u) {
-      const lista: Usuario[] = JSON.parse(u);
-      setUsuarios(lista);
-      setUsuarioAtual(lista[0] || null);
-    } else {
-      const adminDefault: Usuario = {
-        id: 1,
-        nome: 'Administrador IGX',
-        email: 'admin@igxgrafica.com',
-        cargo: 'Administrador Master',
-        permissoes: ['dashboard', 'pedidos', 'clientes', 'estoque', 'financeiro', 'usuarios']
-      };
-      setUsuarios([adminDefault]);
-      setUsuarioAtual(adminDefault);
-      localStorage.setItem('igx_usuarios', JSON.stringify([adminDefault]));
-    }
+    try {
+      const u = localStorage.getItem('igx_usuarios');
+      if (u) {
+        const parsed: Usuario[] = JSON.parse(u);
+        if (parsed.length > 0) setUsuarios(parsed);
+      }
 
-    const c = localStorage.getItem('igx_clientes'); if (c) setClientes(JSON.parse(c));
-    const o = localStorage.getItem('igx_ordens'); if (o) setOrdens(JSON.parse(o));
-    const i = localStorage.getItem('igx_insumos');
-    if (i) setInsumos(JSON.parse(i)); else {
-      const defInsumos: Insumo[] = [
-        { id: 1, nome: 'Bobina Lona 440g', quantidade: 50, unidade: 'm', minimo: 10 },
-        { id: 2, nome: 'Adesivo Vinil Brilho', quantidade: 20, unidade: 'm', minimo: 5 },
-        { id: 3, nome: 'Papel Couché 150g', quantidade: 2000, unidade: 'folhas', minimo: 500 }
-      ];
-      setInsumos(defInsumos);
+      const session = localStorage.getItem('igx_sessao');
+      if (session) {
+        setUsuarioLogado(JSON.parse(session));
+      }
+
+      const c = localStorage.getItem('igx_clientes'); if (c) setClientes(JSON.parse(c));
+      const o = localStorage.getItem('igx_ordens'); if (o) setOrdens(JSON.parse(o));
+      const i = localStorage.getItem('igx_insumos');
+      if (i) setInsumos(JSON.parse(i)); else {
+        const defInsumos: Insumo[] = [
+          { id: 1, nome: 'Bobina Lona 440g', quantidade: 50, unidade: 'm', precoUnitario: 18.50, minimo: 10 },
+          { id: 2, nome: 'Adesivo Vinil Brilho', quantidade: 20, unidade: 'm', precoUnitario: 12.00, minimo: 5 },
+          { id: 3, nome: 'Papel Couché 150g A4', quantidade: 2000, unidade: 'folhas', precoUnitario: 0.25, minimo: 500 }
+        ];
+        setInsumos(defInsumos);
+      }
+      const f = localStorage.getItem('igx_financeiro'); if (f) setFinanceiro(JSON.parse(f));
+    } catch (e) {
+      console.error("Erro ao carregar dados:", e);
     }
-    const f = localStorage.getItem('igx_financeiro'); if (f) setFinanceiro(JSON.parse(f));
   }, []);
 
   // Salvar alterações
@@ -118,23 +139,35 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('igx_insumos', JSON.stringify(insumos)); }, [insumos]);
   useEffect(() => { localStorage.setItem('igx_financeiro', JSON.stringify(financeiro)); }, [financeiro]);
 
-  // Garantir que o usuário só fique em aba que ele tem permissão
-  useEffect(() => {
-    if (usuarioAtual && !usuarioAtual.permissoes.includes(abaAtiva)) {
-      setAbaAtiva(usuarioAtual.permissoes[0] || 'pedidos');
+  // Login e Logout
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroLogin('');
+    
+    const user = usuarios.find(u => 
+      (u.email.toLowerCase() === loginEmail.trim().toLowerCase() || u.nome.toLowerCase() === loginEmail.trim().toLowerCase()) 
+      && u.senha === loginSenha
+    );
+
+    if (user) {
+      setUsuarioLogado(user);
+      localStorage.setItem('igx_sessao', JSON.stringify(user));
+      setAbaAtiva(user.permissoes[0] || 'dashboard');
+    } else {
+      setErroLogin('E-mail/Usuário ou senha incorretos!');
     }
-  }, [usuarioAtual, abaAtiva]);
+  };
 
-  // Cálculos
-  const areaTotal = largura * altura;
-  const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
-    ? areaTotal * quantidade * precoUnidade
-    : quantidade * precoUnidade;
+  const handleLogout = () => {
+    setUsuarioLogado(null);
+    localStorage.removeItem('igx_sessao');
+  };
 
-  const totalEntradas = financeiro.filter(x => x.tipo === 'Entrada').reduce((acc, curr) => acc + curr.valor, 0);
-  const saldoFinanceiro = totalEntradas - financeiro.filter(x => x.tipo === 'Saida').reduce((acc, curr) => acc + curr.valor, 0);
+  const temPermissao = (p: Permissao) => {
+    if (!usuarioLogado) return false;
+    return usuarioLogado.permissoes.includes(p);
+  };
 
-  // Ações Usuários
   const handleTogglePermissao = (p: Permissao) => {
     if (permSel.includes(p)) {
       setPermSel(permSel.filter(item => item !== p));
@@ -143,23 +176,112 @@ export default function Home() {
     }
   };
 
-  const handleCadastrarUsuario = (e: React.FormEvent) => {
+  // Funções do Estoque
+  const handleCadastrarInsumo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nomeUser || permSel.length === 0) return alert('Informe o nome e selecione ao menos uma permissão!');
-    
-    const novo: Usuario = {
+    if (!nomeInsumo) return alert('Informe o nome do insumo!');
+
+    const novo: Insumo = {
       id: Date.now(),
-      nome: nomeUser,
-      email: emailUser || 'user@igxgrafica.com',
-      cargo: cargoUser,
-      permissoes: permSel
+      nome: nomeInsumo,
+      quantidade: Number(qtdInsumo),
+      unidade: unidadeInsumo,
+      precoUnitario: Number(precoUnitInsumo),
+      minimo: Number(minInsumo)
     };
 
-    setUsuarios([...usuarios, novo]);
-    setNomeUser(''); setEmailUser('');
-    alert('Novo usuário cadastrado com sucesso!');
+    setInsumos([...insumos, novo]);
+    setNomeInsumo('');
+    setQtdInsumo(10);
+    setPrecoUnitInsumo(15);
+    setMinInsumo(5);
+    alert('Item cadastrado no estoque!');
   };
 
+  const ajustarEstoqueRapido = (id: number) => {
+    const qtdStr = prompt('Digite a quantidade a ADICIONAR (use sinal negativo ex: -5 para baixar):');
+    if (!qtdStr) return;
+    const val = Number(qtdStr);
+    if (isNaN(val)) return alert('Valor inválido!');
+
+    setInsumos(insumos.map(item => {
+      if (item.id === id) {
+        return { ...item, quantidade: Math.max(0, item.quantidade + val) };
+      }
+      return item;
+    }));
+  };
+
+  const removerInsumo = (id: number) => {
+    if (confirm('Deseja excluir este item do estoque?')) {
+      setInsumos(insumos.filter(i => i.id !== id));
+    }
+  };
+
+  // Funções de Usuário
+  const handleSalvarUsuario = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nomeUser || permSel.length === 0) return alert('Informe o nome e selecione ao menos uma permissão!');
+
+    if (editandoId) {
+      setUsuarios(usuarios.map(u => {
+        if (u.id === editandoId) {
+          return {
+            ...u,
+            nome: nomeUser,
+            email: emailUser,
+            cargo: cargoUser,
+            permissoes: permSel,
+            senha: senhaUser ? senhaUser : u.senha
+          };
+        }
+        return u;
+      }));
+      alert('Perfil de usuário atualizado!');
+      cancelarEdicao();
+    } else {
+      if (!senhaUser) return alert('Por favor, defina uma senha inicial para o usuário!');
+      const novo: Usuario = {
+        id: Date.now(),
+        nome: nomeUser,
+        email: emailUser || `${nomeUser.toLowerCase().replace(/\s+/g, '')}@igxgrafica.com`,
+        senha: senhaUser,
+        cargo: cargoUser,
+        permissoes: permSel
+      };
+      setUsuarios([...usuarios, novo]);
+      cancelarEdicao();
+      alert('Novo usuário cadastrado!');
+    }
+  };
+
+  const iniciarEdicao = (u: Usuario) => {
+    setEditandoId(u.id);
+    setNomeUser(u.nome);
+    setEmailUser(u.email);
+    setSenhaUser('');
+    setCargoUser(u.cargo);
+    setPermSel(u.permissoes);
+  };
+
+  const redefinirSenhaRapida = (u: Usuario) => {
+    const nova = prompt(`Digite a nova senha para ${u.nome}:`);
+    if (nova && nova.trim().length > 0) {
+      setUsuarios(usuarios.map(item => item.id === u.id ? { ...item, senha: nova.trim() } : item));
+      alert(`Senha de ${u.nome} redefinida!`);
+    }
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setNomeUser('');
+    setEmailUser('');
+    setSenhaUser('');
+    setCargoUser('Atendente');
+    setPermSel(['pedidos', 'clientes']);
+  };
+
+  // Demais Ações do Sistema
   const handleCadastrarCliente = (e: React.FormEvent) => {
     e.preventDefault();
     if (!novoNome) return;
@@ -171,6 +293,11 @@ export default function Home() {
   const handleGerarOS = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteSel) return alert('Selecione um cliente!');
+
+    const areaTotal = largura * altura;
+    const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
+      ? areaTotal * quantidade * precoUnidade
+      : quantidade * precoUnidade;
 
     const novaOS: OrdemServico = {
       id: Date.now(),
@@ -192,44 +319,112 @@ export default function Home() {
     setOrdens(ordens.map(o => o.id === id ? { ...o, status: novoStatus } : o));
   };
 
-  const temPermissao = (p: Permissao) => usuarioAtual?.permissoes.includes(p);
+  // Cálculos
+  const areaTotal = largura * altura;
+  const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
+    ? areaTotal * quantidade * precoUnidade
+    : quantidade * precoUnidade;
 
+  const totalEntradas = financeiro.filter(x => x.tipo === 'Entrada').reduce((acc, curr) => acc + curr.valor, 0);
+  const saldoFinanceiro = totalEntradas - financeiro.filter(x => x.tipo === 'Saida').reduce((acc, curr) => acc + curr.valor, 0);
+
+  // Valor Total Investido em Estoque
+  const valorTotalEstoque = insumos.reduce((acc, curr) => acc + (curr.quantidade * curr.precoUnitario), 0);
+  const insumosCriticos = insumos.filter(i => i.quantidade <= i.minimo);
+
+  // TELA DE LOGIN
+  if (!usuarioLogado) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center p-4 font-sans selection:bg-black selection:text-amber-400">
+        <div className="w-full max-w-md bg-amber-100/95 border border-black/30 p-8 rounded-3xl shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-block bg-black text-amber-400 px-4 py-1.5 rounded-xl font-black text-2xl shadow-xl tracking-widest border border-amber-300/30">
+              IGX
+            </div>
+            <h1 className="text-2xl font-black text-black tracking-wide">GRÁFICA</h1>
+            <p className="text-xs font-bold text-black/70">Acesse com suas credenciais</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4 text-sm">
+            {erroLogin && (
+              <div className="bg-red-600 text-white p-3 rounded-xl font-bold text-xs text-center shadow">
+                {erroLogin}
+              </div>
+            )}
+
+            <div>
+              <label className="block mb-1 text-black font-extrabold">E-mail ou Nome de Usuário</label>
+              <input 
+                type="text" 
+                required
+                placeholder="ex: admin@igxgrafica.com"
+                value={loginEmail} 
+                onChange={e => setLoginEmail(e.target.value)} 
+                className="w-full bg-amber-50 border border-black/30 rounded-xl p-3 text-black font-bold outline-none focus:border-black focus:ring-2 focus:ring-black/20" 
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1 text-black font-extrabold">Senha</label>
+              <input 
+                type="password" 
+                required
+                placeholder="••••••••"
+                value={loginSenha} 
+                onChange={e => setLoginSenha(e.target.value)} 
+                className="w-full bg-amber-50 border border-black/30 rounded-xl p-3 text-black font-bold outline-none focus:border-black focus:ring-2 focus:ring-black/20" 
+              />
+            </div>
+
+            <button type="submit" className="w-full bg-black hover:bg-neutral-900 text-amber-400 font-black py-3.5 rounded-xl transition shadow-xl text-base tracking-wide border border-amber-400/30">
+              Entrar no Sistema
+            </button>
+          </form>
+
+          <div className="text-center border-t border-black/10 pt-4">
+            <p className="text-[11px] text-black/60 font-semibold">
+              Credencial inicial: <br />
+              <span className="font-extrabold text-black">admin@igxgrafica.com</span> / Senha: <span className="font-extrabold text-black">admin123</span>
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // PAINEL DO SISTEMA
   return (
     <main className="min-h-screen bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-black p-4 md:p-8 font-sans selection:bg-black selection:text-amber-400">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Topo / Header da IGX Gráfica com Seletor de Perfil */}
+        {/* Topo / Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-black/30 pb-5">
           <div className="flex items-center gap-3">
             <div className="bg-black text-amber-400 px-3.5 py-1 rounded-lg font-black text-xl shadow-xl tracking-widest border border-amber-300/30">
               IGX
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-wider text-black">
-                GRÁFICA
-              </h1>
-              <p className="text-xs text-black/80 font-bold">Gestão de Perfis & Acessos</p>
+              <h1 className="text-2xl font-black tracking-wider text-black">GRÁFICA</h1>
+              <p className="text-xs text-black/80 font-bold">Gestão & Produção Premium</p>
             </div>
           </div>
 
-          {/* Troca Rápida de Usuário para Testar Perfis */}
-          <div className="flex items-center gap-2 bg-black/90 text-amber-400 p-2 rounded-xl shadow-lg border border-black/20 text-xs">
-            <span className="font-bold text-amber-200">Usuário Atual:</span>
-            <select 
-              value={usuarioAtual?.id || ''} 
-              onChange={(e) => {
-                const u = usuarios.find(x => x.id === Number(e.target.value));
-                if (u) setUsuarioAtual(u);
-              }}
-              className="bg-amber-400 text-black font-extrabold px-2 py-1 rounded outline-none cursor-pointer"
+          {/* Usuário Logado & Botão Sair */}
+          <div className="flex items-center gap-3 bg-black text-amber-400 p-2 px-3 rounded-xl shadow-lg border border-black/20 text-xs">
+            <div>
+              <p className="font-black text-amber-300">{usuarioLogado.nome}</p>
+              <p className="text-[10px] text-amber-200/70 font-bold">{usuarioLogado.cargo}</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="bg-amber-400 hover:bg-amber-300 text-black font-extrabold px-2.5 py-1 rounded-lg transition ml-2"
+              title="Sair do sistema"
             >
-              {usuarios.map(u => (
-                <option key={u.id} value={u.id}>{u.nome} ({u.cargo})</option>
-              ))}
-            </select>
+              Sair ✕
+            </button>
           </div>
 
-          {/* Navegação Filtrada por Permissão */}
+          {/* Navegação principal */}
           <div className="flex flex-wrap bg-amber-600/30 backdrop-blur-md p-1.5 rounded-xl border border-black/20 gap-1 text-sm shadow-lg">
             {[
               { id: 'dashboard', label: 'Dashboard' },
@@ -263,17 +458,24 @@ export default function Home() {
                 <p className="text-2xl font-black text-emerald-800 mt-2">R$ {totalEntradas.toFixed(2)}</p>
               </div>
               <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
+                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Valor em Estoque</p>
+                <p className="text-2xl font-black text-amber-900 mt-2">R$ {valorTotalEstoque.toFixed(2)}</p>
+              </div>
+              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
+                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Estoque Crítico (Repor)</p>
+                <p className="text-2xl font-black text-red-700 mt-2">{insumosCriticos.length} itens</p>
+              </div>
+              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
                 <p className="text-xs text-black/70 font-black uppercase tracking-wider">Pedidos em Aberto</p>
-                <p className="text-2xl font-black text-amber-900 mt-2">{ordens.filter(o => o.status === 'Aberto').length}</p>
+                <p className="text-2xl font-black text-amber-950 mt-2">{ordens.filter(o => o.status === 'Aberto').length}</p>
               </div>
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Em Produção</p>
-                <p className="text-2xl font-black text-amber-950 mt-2">{ordens.filter(o => o.status === 'Em Andamento').length}</p>
-              </div>
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Pedidos Finalizados</p>
-                <p className="text-2xl font-black text-emerald-900 mt-2">{ordens.filter(o => o.status === 'Finalizado').length}</p>
-              </div>
+            </div>
+
+            <div className="bg-amber-100/90 border border-black/20 rounded-2xl p-6 shadow-lg">
+              <h3 className="text-lg font-black text-black mb-2">Painel de Controle - IGX Gráfica</h3>
+              <p className="text-black/80 text-sm font-medium leading-relaxed">
+                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar o estoque com alerta de reposição e visualizar o fluxo financeiro.
+              </p>
             </div>
           </div>
         )}
@@ -416,18 +618,172 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. ESTOQUE */}
+        {/* 4. ESTOQUE & INSUMOS COM ALERTA E VALORES */}
         {abaAtiva === 'estoque' && temPermissao('estoque') && (
-          <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-            <h2 className="text-lg font-black text-black">Estoque de Insumos</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {insumos.map(item => (
-                <div key={item.id} className="bg-amber-50 border border-black/20 p-4 rounded-xl">
-                  <p className="font-black text-black">{item.nome}</p>
-                  <p className="text-2xl font-black text-amber-950 mt-2">{item.quantidade} <span className="text-xs text-black/60 font-bold">{item.unidade}</span></p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Form de Cadastro de Insumo */}
+            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
+              <h2 className="text-lg font-black text-black">Cadastrar Item no Estoque</h2>
+              
+              <form onSubmit={handleCadastrarInsumo} className="space-y-4 text-sm">
+                <div>
+                  <label className="block mb-1 text-black font-extrabold">Nome do Insumo / Material</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Ex: Tinta Eco-Solvente Magenta"
+                    value={nomeInsumo} 
+                    onChange={e => setNomeInsumo(e.target.value)} 
+                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                  />
                 </div>
-              ))}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Quantidade Inicial</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={qtdInsumo} 
+                      onChange={e => setQtdInsumo(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Unidade</label>
+                    <select 
+                      value={unidadeInsumo} 
+                      onChange={e => setUnidadeInsumo(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold"
+                    >
+                      <option value="m">Metros (m)</option>
+                      <option value="m²">Metros Quadrados (m²)</option>
+                      <option value="folhas">Folhas</option>
+                      <option value="litros">Litros (L)</option>
+                      <option value="unidades">Unidades (un)</option>
+                      <option value="caixas">Caixas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Preço Custo Unit. (R$)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={precoUnitInsumo} 
+                      onChange={e => setPrecoUnitInsumo(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 text-black font-extrabold">Mínimo (Alerta)</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      value={minInsumo} 
+                      onChange={e => setMinInsumo(Number(e.target.value))} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
+                  Salvar no Estoque
+                </button>
+              </form>
             </div>
+
+            {/* Listagem de Estoque e Alertas de Reposição */}
+            <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-black/20 pb-3">
+                <div>
+                  <h2 className="text-lg font-black text-black">Itens em Estoque ({insumos.length})</h2>
+                  <p className="text-xs text-black/70 font-bold">Valor Total Investido: <span className="text-black font-black">R$ {valorTotalEstoque.toFixed(2)}</span></p>
+                </div>
+
+                {insumosCriticos.length > 0 && (
+                  <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-xl animate-pulse shadow">
+                    ⚠️ {insumosCriticos.length} item(ns) precisam de REPOSIÇÃO!
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {insumos.map(item => {
+                  const precisaRepor = item.quantidade <= item.minimo;
+                  const valorTotalItem = item.quantidade * item.precoUnitario;
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`p-4 rounded-2xl border space-y-3 transition-all ${
+                        precisaRepor 
+                          ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' 
+                          : 'bg-amber-50 border-black/20 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-black text-black text-base">{item.nome}</p>
+                          <p className="text-[11px] font-bold text-black/60">Custo un: R$ {item.precoUnitario.toFixed(2)} / {item.unidade}</p>
+                        </div>
+
+                        {precisaRepor ? (
+                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                            Repor Estoque
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                            OK
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
+                        <div>
+                          <span className="text-black/60 font-bold block text-[10px]">QTD ATUAL:</span>
+                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>
+                            {item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span>
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-black/60 font-bold block text-[10px]">TOTAL EM DINHEIRO:</span>
+                          <span className="text-sm font-black text-black">
+                            R$ {valorTotalItem.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
+                        <span>Mínimo seguro: {item.minimo} {item.unidade}</span>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => ajustarEstoqueRapido(item.id)}
+                            className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition"
+                            title="Entrada ou saída de estoque"
+                          >
+                            + / -
+                          </button>
+                          <button 
+                            onClick={() => removerInsumo(item.id)}
+                            className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition"
+                            title="Remover item"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -449,20 +805,44 @@ export default function Home() {
           </div>
         )}
 
-        {/* 6. GESTÃO DE USUÁRIOS E PERMISSÕES */}
+        {/* 6. GESTÃO DE USUÁRIOS E SENHAS */}
         {abaAtiva === 'usuarios' && temPermissao('usuarios') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Cadastrar Novo Usuário</h2>
-              <form onSubmit={handleCadastrarUsuario} className="space-y-4 text-sm">
+              <div className="flex justify-between items-center border-b border-black/20 pb-3">
+                <h2 className="text-lg font-black text-black">
+                  {editandoId ? 'Editar Perfil de Usuário' : 'Cadastrar Novo Usuário'}
+                </h2>
+                {editandoId && (
+                  <button onClick={cancelarEdicao} className="text-xs bg-black text-amber-400 px-2 py-1 rounded font-bold">
+                    Cancelar ✕
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleSalvarUsuario} className="space-y-4 text-sm">
                 <div>
                   <label className="block mb-1 text-black font-extrabold">Nome Completo</label>
                   <input type="text" required value={nomeUser} onChange={e => setNomeUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
                 <div>
-                  <label className="block mb-1 text-black font-extrabold">E-mail</label>
+                  <label className="block mb-1 text-black font-extrabold">E-mail / Login</label>
                   <input type="email" value={emailUser} onChange={e => setEmailUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
                 </div>
+
+                <div>
+                  <label className="block mb-1 text-black font-extrabold">
+                    {editandoId ? 'Nova Senha (deixe em branco p/ não alterar)' : 'Senha de Acesso'}
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={senhaUser} 
+                    onChange={e => setSenhaUser(e.target.value)} 
+                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
+                  />
+                </div>
+
                 <div>
                   <label className="block mb-1 text-black font-extrabold">Cargo / Função</label>
                   <input type="text" value={cargoUser} onChange={e => setCargoUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" placeholder="Ex: Impressor / Vendedor" />
@@ -493,30 +873,48 @@ export default function Home() {
                 </div>
 
                 <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
-                  Salvar Usuário & Permissões
+                  {editandoId ? 'Atualizar Perfil' : 'Salvar Usuário & Permissões'}
                 </button>
               </form>
             </div>
 
             <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Usuários Cadastrados ({usuarios.length})</h2>
+              <h2 className="text-lg font-black text-black">Usuários do Sistema ({usuarios.length})</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {usuarios.map(u => (
-                  <div key={u.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-2 shadow-sm">
-                    <div className="flex justify-between items-start">
-                      <p className="font-black text-black">{u.nome}</p>
-                      <span className="text-[10px] bg-black text-amber-400 px-2 py-0.5 rounded-full font-bold">{u.cargo}</span>
-                    </div>
-                    <p className="text-xs text-black/70 font-semibold">{u.email}</p>
-                    <div className="border-t border-black/10 pt-2 mt-2">
-                      <p className="text-[11px] font-black text-black mb-1">Acessos liberados:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {u.permissoes.map(p => (
-                          <span key={p} className="text-[10px] bg-amber-200/80 text-black px-1.5 py-0.5 rounded font-bold border border-black/10">
-                            {p}
-                          </span>
-                        ))}
+                  <div key={u.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-3 shadow-sm flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <p className="font-black text-black">{u.nome}</p>
+                        <span className="text-[10px] bg-black text-amber-400 px-2 py-0.5 rounded-full font-bold">{u.cargo}</span>
                       </div>
+                      <p className="text-xs text-black/70 font-semibold">{u.email}</p>
+                      
+                      <div className="border-t border-black/10 pt-2">
+                        <p className="text-[10px] font-black text-black mb-1">Acessos:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {u.permissoes.map(p => (
+                            <span key={p} className="text-[9px] bg-amber-200/80 text-black px-1.5 py-0.5 rounded font-bold border border-black/10">
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10">
+                      <button 
+                        onClick={() => iniciarEdicao(u)}
+                        className="bg-black text-amber-400 hover:bg-neutral-900 text-xs font-bold py-1.5 rounded-lg transition"
+                      >
+                        Editar Perfil
+                      </button>
+                      <button 
+                        onClick={() => redefinirSenhaRapida(u)}
+                        className="bg-amber-600/30 hover:bg-amber-600 text-black text-xs font-bold py-1.5 rounded-lg border border-black/20 transition"
+                      >
+                        Redefinir Senha
+                      </button>
                     </div>
                   </div>
                 ))}
