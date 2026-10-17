@@ -79,6 +79,9 @@ export default function Home() {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([]);
 
+  // Busca no Estoque
+  const [buscaEstoque, setBuscaEstoque] = useState('');
+
   // Form de Novo/Edição de Usuário
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [nomeUser, setNomeUser] = useState('');
@@ -392,6 +395,12 @@ export default function Home() {
   const valorTotalEstoque = insumos.reduce((acc, curr) => acc + (curr.quantidade * curr.precoCusto), 0);
   const insumosCriticos = insumos.filter(i => i.quantidade <= i.minimo);
 
+  // Filtragem dos Insumos/Produtos do Estoque
+  const insumosFiltrados = insumos.filter(item => 
+    item.nome.toLowerCase().includes(buscaEstoque.toLowerCase().trim()) ||
+    item.unidade.toLowerCase().includes(buscaEstoque.toLowerCase().trim())
+  );
+
   // TELA DE LOGIN
   if (!usuarioLogado) {
     return (
@@ -534,7 +543,7 @@ export default function Home() {
             <div className="bg-amber-100/90 border border-black/20 rounded-2xl p-6 shadow-lg">
               <h3 className="text-lg font-black text-black mb-2">Painel de Controle - IGX Gráfica</h3>
               <p className="text-black/80 text-sm font-medium leading-relaxed">
-                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes, controlar o estoque com cálculo automático de margem de lucro e visualizar o fluxo financeiro.
+                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes, controlar o estoque com busca rápida e cálculo automático de margem de lucro e visualizar o fluxo financeiro.
               </p>
             </div>
           </div>
@@ -770,7 +779,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. ESTOQUE DE PRODUTOS COMPLETO */}
+        {/* 4. ESTOQUE DE PRODUTOS COMPLETO COM BUSCA */}
         {abaAtiva === 'estoque' && temPermissao('estoque') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
@@ -846,50 +855,86 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {insumos.map(item => {
-                  const precisaRepor = item.quantidade <= item.minimo;
-                  const valorTotalCusto = item.quantidade * item.precoCusto;
-
-                  return (
-                    <div key={item.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${precisaRepor ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' : 'bg-amber-50 border-black/20 shadow-sm'}`}>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-black text-black text-base">{item.nome}</p>
-                          <p className="text-[11px] font-bold text-black/70">
-                            Custo: R$ {item.precoCusto.toFixed(2)} | Venda: R$ {item.precoVenda.toFixed(2)}
-                          </p>
-                        </div>
-                        {precisaRepor ? (
-                          <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Repor Estoque</span>
-                        ) : (
-                          <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">OK</span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
-                        <div>
-                          <span className="text-black/60 font-bold block text-[10px]">QUANTIDADE ATUAL:</span>
-                          <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>{item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span></span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-black/60 font-bold block text-[10px]">MARGEM DE LUCRO:</span>
-                          <span className="text-sm font-black text-emerald-800 block">+{item.margemLucro.toFixed(1)}%</span>
-                          <span className="text-[10px] text-black/60 font-bold">Investido: R$ {valorTotalCusto.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
-                        <span>Min. Reposição: {item.minimo} {item.unidade}</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => ajustarEstoqueRapido(item.id)} className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition" title="Entrada ou saída de estoque">+ / -</button>
-                          <button onClick={() => removerInsumo(item.id)} className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition" title="Remover item">✕</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* BARRA DE CONSULTA / BUSCA NO ESTOQUE */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Consultar / Pesquisar produto no estoque..."
+                      value={buscaEstoque} 
+                      onChange={e => setBuscaEstoque(e.target.value)} 
+                      className="w-full bg-amber-50 border border-black/30 rounded-xl py-2.5 pl-3 pr-8 text-black font-extrabold placeholder-black/50 text-sm focus:outline-none focus:border-black shadow-inner" 
+                    />
+                    {buscaEstoque && (
+                      <button 
+                        onClick={() => setBuscaEstoque('')}
+                        className="absolute right-2.5 top-2.5 text-black/60 hover:text-black font-black text-xs bg-amber-200/80 rounded-full w-5 h-5 flex items-center justify-center"
+                        title="Limpar busca"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {buscaEstoque && (
+                  <p className="text-[11px] font-bold text-black/70 mt-1">
+                    Exibindo {insumosFiltrados.length} de {insumos.length} produtos
+                  </p>
+                )}
               </div>
+
+              {insumosFiltrados.length === 0 ? (
+                <div className="bg-amber-50/80 p-6 rounded-2xl text-center border border-black/10">
+                  <p className="font-extrabold text-black text-sm">Nenhum produto encontrado para "{buscaEstoque}".</p>
+                  <p className="text-xs text-black/60 font-semibold mt-1">Verifique o termo digitado ou limpe a busca.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {insumosFiltrados.map(item => {
+                    const precisaRepor = item.quantidade <= item.minimo;
+                    const valorTotalCusto = item.quantidade * item.precoCusto;
+
+                    return (
+                      <div key={item.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${precisaRepor ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' : 'bg-amber-50 border-black/20 shadow-sm'}`}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-black text-black text-base">{item.nome}</p>
+                            <p className="text-[11px] font-bold text-black/70">
+                              Custo: R$ {item.precoCusto.toFixed(2)} | Venda: R$ {item.precoVenda.toFixed(2)}
+                            </p>
+                          </div>
+                          {precisaRepor ? (
+                            <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Repor Estoque</span>
+                          ) : (
+                            <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">OK</span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
+                          <div>
+                            <span className="text-black/60 font-bold block text-[10px]">QUANTIDADE ATUAL:</span>
+                            <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>{item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span></span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-black/60 font-bold block text-[10px]">MARGEM DE LUCRO:</span>
+                            <span className="text-sm font-black text-emerald-800 block">+{item.margemLucro.toFixed(1)}%</span>
+                            <span className="text-[10px] text-black/60 font-bold">Investido: R$ {valorTotalCusto.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
+                          <span>Min. Reposição: {item.minimo} {item.unidade}</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => ajustarEstoqueRapido(item.id)} className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition" title="Entrada ou saída de estoque">+ / -</button>
+                            <button onClick={() => removerInsumo(item.id)} className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition" title="Remover item">✕</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
