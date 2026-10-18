@@ -14,12 +14,9 @@ import {
   Trash2,
   Search,
   LogOut,
-  Clock,
-  Calendar as CalendarIcon,
   Edit3
 } from 'lucide-react'
 
-// ==================== TIPOS DE DADOS ====================
 type Usuario = {
   id: number
   nome: string
@@ -70,16 +67,12 @@ type FinanceiroItem = {
 }
 
 export default function ERPGrafica() {
-  // ==================== ESTADOS DE AUTENTICAÇÃO ====================
   const [usuarioAtual, setUsuarioAtual] = useState<Usuario | null>(null)
   const [nomeLogin, setNomeLogin] = useState('')
   const [senhaLogin, setSenhaLogin] = useState('')
   const [erroLogin, setErroLogin] = useState('')
-
-  // ==================== ESTADO DA ABA ATIVA ====================
   const [abaAtiva, setAbaAtiva] = useState<string>('dashboard')
 
-  // ==================== ESTADOS DOS DADOS ====================
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [insumos, setInsumos] = useState<Insumo[]>([])
@@ -87,9 +80,9 @@ export default function ERPGrafica() {
   const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // ==================== RELÓGIO DIGITAL (LOGIN) ====================
   const [horaAtual, setHoraAtual] = useState('')
   const [dataAtual, setDataAtual] = useState('')
+  const [diaHoje, setDiaHoje] = useState<number>(1)
 
   useEffect(() => {
     const atualizarRelogio = () => {
@@ -103,16 +96,14 @@ export default function ERPGrafica() {
           day: 'numeric'
         })
       )
+      setDiaHoje(agora.getDate())
     }
     atualizarRelogio()
     const timer = setInterval(atualizarRelogio, 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // ==================== FILTROS E PESQUISAS ====================
   const [buscaCliente, setBuscaCliente] = useState('')
-
-  // ==================== ESTADOS DOS FORMULÁRIOS ====================
   const [novoCliente, setNovoCliente] = useState<Partial<Cliente>>({})
   const [novoInsumo, setNovoInsumo] = useState<Partial<Insumo>>({
     unidade: 'unidade',
@@ -125,14 +116,12 @@ export default function ERPGrafica() {
   const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({ status: 'Aberto' })
   const [novoFinanceiro, setNovoFinanceiro] = useState<Partial<FinanceiroItem>>({ tipo: 'Entrada' })
   
-  // USUÁRIOS
   const [usuarioEditandoId, setUsuarioEditandoId] = useState<number | null>(null)
   const [nomeUsuario, setNomeUsuario] = useState('')
   const [senhaUsuario, setSenhaUsuario] = useState('')
   const [cargoUsuario, setCargoUsuario] = useState('Operador')
   const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>(['dashboard'])
 
-  // ==================== CARREGAMENTO E SINC. EM TEMPO REAL ====================
   useEffect(() => {
     fetchTodosDados()
 
@@ -169,7 +158,7 @@ export default function ERPGrafica() {
     if (data) setUsuarios(data)
   }
 
-  const fetchUsuariosUpdateCurrent = async (payload: any) => {
+  const fetchUsuariosUpdateCurrent = async (_payload: any) => {
     const { data } = await supabase.from('usuarios').select('*').order('id', { ascending: true })
     if (data) {
       setUsuarios(data)
@@ -202,7 +191,6 @@ export default function ERPGrafica() {
     if (data) setFinanceiro(data)
   }
 
-  // ==================== LÓGICA DE LOGIN ====================
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setErroLogin('')
@@ -228,7 +216,6 @@ export default function ERPGrafica() {
     setSenhaLogin('')
   }
 
-  // ==================== AÇÕES CRUD (SUPABASE) ====================
   const handleAdicionarCliente = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoCliente.nome || !novoCliente.telefone) {
@@ -433,7 +420,6 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  // ==================== TELA DE LOGIN ====================
   if (!usuarioAtual) {
     return (
       <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
@@ -526,8 +512,8 @@ export default function ERPGrafica() {
           <div className="bg-neutral-900/90 p-6 rounded-2xl border border-neutral-800 flex flex-col justify-between space-y-6 shadow-inner">
             
             <div className="bg-neutral-950 border border-amber-500/30 rounded-2xl p-5 text-center shadow-lg">
-              <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
-                <Clock className="w-4 h-4 animate-pulse" /> Horário Oficial
+              <div className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
+                ⏱️ Horário Oficial
               </div>
               <div className="text-4xl font-black text-white tracking-wider font-mono">
                 {horaAtual || '00:00:00'}
@@ -538,8 +524,8 @@ export default function ERPGrafica() {
             </div>
 
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 text-center shadow-lg">
-              <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">
-                <CalendarIcon className="w-4 h-4" /> Calendário Operacional
+              <div className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">
+                📅 Calendário Operacional
               </div>
               <div className="grid grid-cols-7 gap-1 text-xs">
                 {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((dia, idx) => (
@@ -547,8 +533,7 @@ export default function ERPGrafica() {
                 ))}
                 {Array.from({ length: 31 }, (_, i) => {
                   const diaNum = i + 1
-                  const hoje = new Date().getDate()
-                  const isHoje = diaNum === hoje
+                  const isHoje = diaNum === diaHoje
                   return (
                     <div
                       key={i}
@@ -572,7 +557,6 @@ export default function ERPGrafica() {
     )
   }
 
-  // ==================== PAINEL PRINCIPAL DO ERP ====================
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-neutral-900 border-r border-neutral-800 p-6 flex flex-col justify-between">
