@@ -139,7 +139,7 @@ export default function ERPGrafica() {
     valor_unitario: 0,
     desconto: 0,
     frete: 0,
-    data_pedido: new Date().toISOString().split('T')[0],
+    data_pedido: typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '',
     vendedor: ''
   })
 
@@ -601,7 +601,7 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  const hojeStr = new Date().toISOString().split('T')[0]
+  const hojeStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '';
   const pedidosNoPrazo = ordens.filter(
     (o) => o.status !== 'Finalizado' && o.data_entrega && o.data_entrega <= hojeStr
   )
