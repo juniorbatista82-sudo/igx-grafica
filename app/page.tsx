@@ -14,7 +14,8 @@ import {
   Trash2,
   Search,
   LogOut,
-  Edit3
+  Edit3,
+  Printer
 } from 'lucide-react'
 
 type Usuario = {
@@ -51,11 +52,16 @@ type Insumo = {
 type OrdemServico = {
   id: number
   cliente: string
+  telefone_cliente?: string
+  documento_cliente?: string
   produto: string
   detalhes: string
   valor: number
   status: 'Aberto' | 'Em Andamento' | 'Concluído'
   data: string
+  data_pedido?: string
+  data_entrega?: string
+  vendedor?: string
 }
 
 type FinanceiroItem = {
@@ -113,7 +119,13 @@ export default function ERPGrafica() {
     margem_lucro: 0,
     minimo: 5
   })
-  const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({ status: 'Aberto' })
+
+  const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({
+    status: 'Aberto',
+    data_pedido: new Date().toISOString().split('T')[0],
+    vendedor: usuarioAtual?.nome || ''
+  })
+
   const [novoFinanceiro, setNovoFinanceiro] = useState<Partial<FinanceiroItem>>({ tipo: 'Entrada' })
   
   const [usuarioEditandoId, setUsuarioEditandoId] = useState<number | null>(null)
@@ -216,6 +228,25 @@ export default function ERPGrafica() {
     setSenhaLogin('')
   }
 
+  const handleClienteChange = (nomeClienteSelecionado: string) => {
+    const clienteEncontrado = clientes.find((c) => c.nome === nomeClienteSelecionado)
+    if (clienteEncontrado) {
+      setNovaOrdem({
+        ...novaOrdem,
+        cliente: clienteEncontrado.nome,
+        telefone_cliente: clienteEncontrado.telefone || '',
+        documento_cliente: clienteEncontrado.cnpj || clienteEncontrado.rg || ''
+      })
+    } else {
+      setNovaOrdem({
+        ...novaOrdem,
+        cliente: nomeClienteSelecionado,
+        telefone_cliente: '',
+        documento_cliente: ''
+      })
+    }
+  }
+
   const handleAdicionarCliente = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoCliente.nome || !novoCliente.telefone) {
@@ -294,15 +325,24 @@ export default function ERPGrafica() {
     const item = {
       id: Date.now(),
       cliente: novaOrdem.cliente,
+      telefone_cliente: novaOrdem.telefone_cliente || '',
+      documento_cliente: novaOrdem.documento_cliente || '',
       produto: novaOrdem.produto,
       detalhes: novaOrdem.detalhes || '',
       valor: Number(novaOrdem.valor),
       status: novaOrdem.status || 'Aberto',
-      data: new Date().toLocaleDateString('pt-BR')
+      data: new Date().toLocaleDateString('pt-BR'),
+      data_pedido: novaOrdem.data_pedido || new Date().toISOString().split('T')[0],
+      data_entrega: novaOrdem.data_entrega || '',
+      vendedor: novaOrdem.vendedor || usuarioAtual?.nome || 'Geral'
     }
 
     await supabase.from('ordens').insert([item])
-    setNovaOrdem({ status: 'Aberto' })
+    setNovaOrdem({
+      status: 'Aberto',
+      data_pedido: new Date().toISOString().split('T')[0],
+      vendedor: usuarioAtual?.nome || ''
+    })
   }
 
   const handleMudarStatusOrdem = async (id: number, novoStatus: 'Aberto' | 'Em Andamento' | 'Concluído') => {
@@ -322,6 +362,68 @@ export default function ERPGrafica() {
         }
       ])
     }
+  }
+
+  const handleImprimirOrdem = (ordem: OrdemServico) => {
+    const janelaImpressao = window.open('', '_blank', 'width=800,height=600')
+    if (!janelaImpressao) return
+
+    janelaImpressao.document.write(`
+      <html>
+        <head>
+          <title>Ordem de Serviço #${ordem.id} - IGX Gráfica</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .title { font-size: 22px; font-weight: bold; color: #b45309; }
+            .info-box { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; paddingTop: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="title">IGX GRÁFICA</div>
+              <div>Sistema de Gestão & Impressão</div>
+            </div>
+            <div style="text-align: right;">
+              <h2>ORDEM DE SERVIÇO / PEDIDO #${ordem.id}</h2>
+              <div>Status: <b>${ordem.status}</b></div>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <h3>Dados do Cliente</h3>
+            <p><b>Cliente / Empresa:</b> ${ordem.cliente}</p>
+            <p><b>Telefone / WhatsApp:</b> ${ordem.telefone_cliente || 'Não informado'}</p>
+            <p><b>CNPJ / RG:</b> ${ordem.documento_cliente || 'Não informado'}</p>
+          </div>
+
+          <div class="info-box">
+            <h3>Detalhes do Pedido</h3>
+            <p><b>Produto / Serviço:</b> ${ordem.produto}</p>
+            <p><b>Especificações:</b> ${ordem.detalhes || 'Nenhuma observação informada.'}</p>
+            <div class="grid" style="margin-top: 10px;">
+              <p><b>Data do Pedido:</b> ${ordem.data_pedido || '-'}</p>
+              <p><b>Data de Entrega:</b> ${ordem.data_entrega || 'A combinar'}</p>
+              <p><b>Vendedor:</b> ${ordem.vendedor || '-'}</p>
+              <p><b>Valor Total:</b> R$ ${Number(ordem.valor).toFixed(2)}</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>IGX Gráfica — Qualidade e Agilidade em Impressão Digital e Offset.</p>
+            <p>Documento gerado em ${new Date().toLocaleString('pt-BR')}</p>
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `)
+    janelaImpressao.document.close()
   }
 
   const handleAdicionarFinanceiro = async (e: React.FormEvent) => {
@@ -683,50 +785,128 @@ export default function ERPGrafica() {
           <div className="space-y-8">
             <div>
               <h1 className="text-2xl font-bold">Ordens de Serviço e Pedidos</h1>
-              <p className="text-sm text-neutral-400">Gerencie os pedidos da gráfica</p>
+              <p className="text-sm text-neutral-400">Gerencie os pedidos da gráfica com preenchimento automático de cliente e impressão</p>
             </div>
 
             <form onSubmit={handleAdicionarOrdem} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Cadastrar Novo Pedido</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Cliente*"
-                  required
-                  value={novaOrdem.cliente || ''}
-                  onChange={(e) => setNovaOrdem({ ...novaOrdem, cliente: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="text"
-                  placeholder="Produto / Serviço*"
-                  required
-                  value={novaOrdem.produto || ''}
-                  onChange={(e) => setNovaOrdem({ ...novaOrdem, produto: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Valor Total (R$)*"
-                  required
-                  value={novaOrdem.valor || ''}
-                  onChange={(e) => setNovaOrdem({ ...novaOrdem, valor: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <button
-                  type="submit"
-                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Criar Pedido
-                </button>
+              <h2 className="font-bold text-lg mb-2 text-amber-400">Cadastrar Novo Pedido / OS</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">CLIENTE*</label>
+                  <select
+                    required
+                    value={novaOrdem.cliente || ''}
+                    onChange={(e) => handleClienteChange(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  >
+                    <option value="">Selecione um cliente cadastrado...</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.nome}>
+                        {c.nome} {c.telefone ? `- ${c.telefone}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">TELEFONE (AUTO)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    placeholder="Preenchido automaticamente"
+                    value={novaOrdem.telefone_cliente || ''}
+                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-400 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">CNPJ / RG (AUTO)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    placeholder="Preenchido automaticamente"
+                    value={novaOrdem.documento_cliente || ''}
+                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-400 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">PRODUTO / SERVIÇO*</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Cartões de Visita, Banner..."
+                    required
+                    value={novaOrdem.produto || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, produto: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DATA DO PEDIDO</label>
+                  <input
+                    type="date"
+                    value={novaOrdem.data_pedido || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, data_pedido: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DATA DE ENTREGA</label>
+                  <input
+                    type="date"
+                    value={novaOrdem.data_entrega || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, data_entrega: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">NOME DO VENDEDOR</label>
+                  <input
+                    type="text"
+                    placeholder="Nome do atendente/vendedor"
+                    value={novaOrdem.vendedor || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, vendedor: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR TOTAL (R$)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    required
+                    value={novaOrdem.valor || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, valor: Number(e.target.value) })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20"
+                  >
+                    <Plus className="w-4 h-4" /> Criar Pedido / OS
+                  </button>
+                </div>
+
               </div>
-              <textarea
-                placeholder="Detalhes do pedido (medidas, papel, acabamento...)"
-                value={novaOrdem.detalhes || ''}
-                onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-400"
-              />
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1">DETALHES / ESPECIFICAÇÕES TÉCNICAS</label>
+                <textarea
+                  placeholder="Medidas, tipo de papel, acabamento, cor, observações..."
+                  value={novaOrdem.detalhes || ''}
+                  onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-400 text-white"
+                />
+              </div>
             </form>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -739,31 +919,52 @@ export default function ERPGrafica() {
                     {ordens
                       .filter((o) => o.status === status)
                       .map((ordem) => (
-                        <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 space-y-2">
+                        <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 space-y-3 shadow-md">
                           <div className="flex justify-between items-start">
-                            <span className="font-bold text-white">{ordem.cliente}</span>
-                            <span className="text-xs font-black text-amber-400">R$ {Number(ordem.valor).toFixed(2)}</span>
+                            <div>
+                              <span className="text-xs text-amber-400 font-black">OS #{ordem.id}</span>
+                              <h4 className="font-bold text-white text-base">{ordem.cliente}</h4>
+                            </div>
+                            <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+                              R$ {Number(ordem.valor).toFixed(2)}
+                            </span>
                           </div>
-                          <p className="text-xs text-neutral-300 font-medium">{ordem.produto}</p>
-                          {ordem.detalhes && <p className="text-xs text-neutral-500">{ordem.detalhes}</p>}
+
+                          <div className="text-xs space-y-1 text-neutral-300">
+                            <p><b>Produto:</b> {ordem.produto}</p>
+                            {ordem.telefone_cliente && <p><b>Tel:</b> {ordem.telefone_cliente}</p>}
+                            {ordem.vendedor && <p><b>Vendedor:</b> {ordem.vendedor}</p>}
+                            {ordem.data_entrega && <p><b>Entrega:</b> {ordem.data_entrega}</p>}
+                            {ordem.detalhes && <p className="text-neutral-400 italic mt-1">{ordem.detalhes}</p>}
+                          </div>
                           
-                          <div className="flex gap-2 pt-2 border-t border-neutral-900">
-                            {status !== 'Aberto' && (
-                              <button
-                                onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Concluído' ? 'Em Andamento' : 'Aberto')}
-                                className="text-xs text-neutral-400 hover:text-white"
-                              >
-                                ← Voltar
-                              </button>
-                            )}
-                            {status !== 'Concluído' && (
-                              <button
-                                onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Aberto' ? 'Em Andamento' : 'Concluído')}
-                                className="text-xs text-amber-400 hover:underline font-bold ml-auto"
-                              >
-                                Avançar →
-                              </button>
-                            )}
+                          <div className="flex items-center justify-between pt-2 border-t border-neutral-900">
+                            <button
+                              onClick={() => handleImprimirOrdem(ordem)}
+                              className="bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-amber-400/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                              title="Imprimir Ordem de Serviço em PDF"
+                            >
+                              <Printer className="w-3.5 h-3.5" /> Imprimir OS
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                              {status !== 'Aberto' && (
+                                <button
+                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Concluído' ? 'Em Andamento' : 'Aberto')}
+                                  className="text-xs text-neutral-400 hover:text-white"
+                                >
+                                  ←
+                                </button>
+                              )}
+                              {status !== 'Concluído' && (
+                                <button
+                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Aberto' ? 'Em Andamento' : 'Concluído')}
+                                  className="text-xs text-amber-400 hover:underline font-bold"
+                                >
+                                  Avançar →
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -887,7 +1088,7 @@ export default function ERPGrafica() {
             </div>
 
             <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto</h2>
+              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto / Insumo</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input
                   type="text"
