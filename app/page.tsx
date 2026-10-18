@@ -572,7 +572,6 @@ export default function ERPGrafica() {
             />
             <div>
               <h2 className="font-black text-lg leading-tight text-amber-400">IGX Gráfica</h2>
-              <span className="text-xs text-neutral-400">Sistema ERP Cloud</span>
             </div>
           </div>
 
@@ -581,7 +580,7 @@ export default function ERPGrafica() {
               { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
               { id: 'pedidos', label: 'Pedidos / OS', icon: FileText },
               { id: 'clientes', label: 'Clientes', icon: Users },
-              { id: 'estoque', label: 'Estoque / Insumos', icon: Package },
+              { id: 'estoque', label: 'Estoque', icon: Package },
               { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
               { id: 'usuarios', label: 'Usuários', icon: UserCheck }
             ]
