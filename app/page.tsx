@@ -17,7 +17,8 @@ import {
   Edit3,
   Printer,
   Calendar,
-  Clock
+  Clock,
+  Wrench
 } from 'lucide-react'
 
 type Usuario = {
@@ -49,6 +50,15 @@ type Insumo = {
   preco_venda: number
   margem_lucro: number
   minimo: number
+  status?: 'Ativo' | 'Inativo'
+}
+
+export interface Servico {
+  id: string
+  nome: string
+  unidade: string
+  valorVenda: number
+  status: 'Ativo' | 'Inativo'
 }
 
 type OrdemServico = {
@@ -92,9 +102,17 @@ export default function ERPGrafica() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [insumos, setInsumos] = useState<Insumo[]>([])
+  const [servicos, setServicos] = useState<Servico[]>([
+    { id: 'SERV-001', nome: 'Criação de Arte / Layout', unidade: 'Unidade', valorVenda: 50.00, status: 'Ativo' },
+    { id: 'SERV-002', nome: 'Corte e Vinco Manual', unidade: 'Cento', valorVenda: 25.00, status: 'Ativo' },
+    { id: 'SERV-003', nome: 'Acabamento em Espiral', unidade: 'Unidade', valorVenda: 5.00, status: 'Ativo' }
+  ])
   const [ordens, setOrdens] = useState<OrdemServico[]>([])
   const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Sub-aba do Catálogo (Produtos ou Serviços)
+  const [abaCatalogo, setAbaCatalogo] = useState<'produtos' | 'servicos'>('produtos')
 
   const [horaAtual, setHoraAtual] = useState('')
   const [dataAtual, setDataAtual] = useState('')
@@ -119,7 +137,6 @@ export default function ERPGrafica() {
     return () => clearInterval(timer)
   }, [])
 
-  const [buscaCliente, setBuscaCliente] = useState('')
   const [novoCliente, setNovoCliente] = useState<Partial<Cliente>>({})
   const [novoInsumo, setNovoInsumo] = useState<Partial<Insumo>>({
     unidade: 'unidade',
@@ -127,8 +144,39 @@ export default function ERPGrafica() {
     preco_custo: 0,
     preco_venda: 0,
     margem_lucro: 0,
-    minimo: 5
+    minimo: 5,
+    status: 'Ativo'
   })
+
+  // Formulário de novo Serviço
+  const [novoServico, setNovoServico] = useState({
+    nome: '',
+    unidade: 'Unidade',
+    valorVenda: '',
+    status: 'Ativo' as 'Ativo' | 'Inativo'
+  })
+
+  // Gerador de código automático (SERV-001, SERV-002...)
+  const gerarProximoCodigoServico = () => {
+    const proximoNum = servicos.length + 1
+    return `SERV-${String(proximoNum).padStart(3, '0')}`
+  }
+
+  const handleAdicionarServico = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoServico.nome || !novoServico.valorVenda) return
+
+    const itemServico: Servico = {
+      id: gerarProximoCodigoServico(),
+      nome: novoServico.nome,
+      unidade: novoServico.unidade,
+      valorVenda: Number(novoServico.valorVenda),
+      status: novoServico.status
+    }
+
+    setServicos([...servicos, itemServico])
+    setNovoServico({ nome: '', unidade: 'Unidade', valorVenda: '', status: 'Ativo' })
+  }
 
   const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({
     status: 'Em Aberto',
@@ -323,11 +371,12 @@ export default function ERPGrafica() {
       preco_custo: custo,
       preco_venda: venda,
       margem_lucro: Number(margem.toFixed(2)),
-      minimo: Number(novoInsumo.minimo || 5)
+      minimo: Number(novoInsumo.minimo || 5),
+      status: novoInsumo.status || 'Ativo'
     }
 
     await supabase.from('insumos').insert([item])
-    setNovoInsumo({ unidade: 'unidade', quantidade: 0, preco_custo: 0, preco_venda: 0, margem_lucro: 0, minimo: 5 })
+    setNovoInsumo({ unidade: 'unidade', quantidade: 0, preco_custo: 0, preco_venda: 0, margem_lucro: 0, minimo: 5, status: 'Ativo' })
   }
 
   const handleAjustarEstoque = async (id: number, delta: number) => {
@@ -339,7 +388,7 @@ export default function ERPGrafica() {
   }
 
   const handleExcluirInsumo = async (id: number) => {
-    if (confirm('Deseja excluir este item do estoque?')) {
+    if (confirm('Deseja excluir este item do catálogo?')) {
       await supabase.from('insumos').delete().eq('id', id)
     }
   }
@@ -412,7 +461,7 @@ export default function ERPGrafica() {
       valor_unitario: 0,
       desconto: 0,
       frete: 0,
-      data_pedido: new Date().toISOString().split('T')[0],
+      data_pedido: typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '',
       vendedor: usuarioAtual?.nome || ''
     })
   }
@@ -435,7 +484,7 @@ export default function ERPGrafica() {
             .title { font-size: 22px; font-weight: bold; color: #b45309; }
             .info-box { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
             .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; paddingTop: 10px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
             th { background: #f1f1f1; }
@@ -505,25 +554,6 @@ export default function ERPGrafica() {
     janelaImpressao.document.close()
   }
 
-  const handleAdicionarFinanceiro = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!novoFinanceiro.descricao || !novoFinanceiro.valor) {
-      alert('Preencha a descrição e o valor do lançamento!')
-      return
-    }
-
-    const item = {
-      id: Date.now(),
-      descricao: novoFinanceiro.descricao,
-      tipo: novoFinanceiro.tipo || 'Entrada',
-      valor: Number(novoFinanceiro.valor),
-      data: new Date().toLocaleDateString('pt-BR')
-    }
-
-    await supabase.from('financeiro').insert([item])
-    setNovoFinanceiro({ tipo: 'Entrada' })
-  }
-
   const handleSalvarUsuario = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nomeUsuario || !senhaUsuario) {
@@ -560,22 +590,6 @@ export default function ERPGrafica() {
     setPermissoesUsuario(['dashboard'])
   }
 
-  const handleIniciarEdicaoUsuario = (u: Usuario) => {
-    setUsuarioEditandoId(u.id)
-    setNomeUsuario(u.nome)
-    setSenhaUsuario(u.senha || '')
-    setCargoUsuario(u.cargo || 'Operador')
-    setPermissoesUsuario(u.permissoes || ['dashboard'])
-  }
-
-  const handleCancelarEdicao = () => {
-    setUsuarioEditandoId(null)
-    setNomeUsuario('')
-    setSenhaUsuario('')
-    setCargoUsuario('Operador')
-    setPermissoesUsuario(['dashboard'])
-  }
-
   const handleExcluirUsuario = async (id: number) => {
     if (confirm('Deseja excluir este usuário?')) {
       await supabase.from('usuarios').delete().eq('id', id)
@@ -601,7 +615,7 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  const hojeStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '';
+  const hojeStr = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : ''
   const pedidosNoPrazo = ordens.filter(
     (o) => o.status !== 'Finalizado' && o.data_entrega && o.data_entrega <= hojeStr
   )
@@ -609,7 +623,6 @@ export default function ERPGrafica() {
   if (!usuarioAtual) {
     return (
       <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-        
         <div className="absolute inset-0 z-0 grid grid-cols-3 opacity-30 pointer-events-none filter blur-[1px]">
           <div className="relative h-full w-full overflow-hidden">
             <img
@@ -637,7 +650,6 @@ export default function ERPGrafica() {
         <div className="absolute inset-0 z-0 bg-neutral-950/80 backdrop-blur-sm" />
 
         <div className="relative z-10 bg-neutral-950/95 text-white border border-amber-500/40 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-          
           <div>
             <div className="text-center md:text-left mb-6">
               <div className="mb-4 flex items-center justify-center md:justify-start">
@@ -696,7 +708,6 @@ export default function ERPGrafica() {
           </div>
 
           <div className="bg-neutral-900/90 p-6 rounded-2xl border border-neutral-800 flex flex-col justify-between space-y-6 shadow-inner">
-            
             <div className="bg-neutral-950 border border-amber-500/30 rounded-2xl p-5 text-center shadow-lg">
               <div className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
                 ⏱️ Horário Oficial
@@ -735,9 +746,7 @@ export default function ERPGrafica() {
                 })}
               </div>
             </div>
-
           </div>
-
         </div>
       </div>
     )
@@ -766,7 +775,7 @@ export default function ERPGrafica() {
               { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
               { id: 'pedidos', label: 'Pedidos / OS', icon: FileText },
               { id: 'clientes', label: 'Clientes', icon: Users },
-              { id: 'estoque', label: 'Estoque', icon: Package },
+              { id: 'estoque', label: 'Catálogo', icon: Package },
               { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
               { id: 'usuarios', label: 'Usuários', icon: UserCheck }
             ]
@@ -821,7 +830,6 @@ export default function ERPGrafica() {
               <p className="text-sm text-neutral-400">Visão geral operacional e prazos da sua gráfica</p>
             </div>
 
-            {/* Apenas contadores operacionais e alertas (sem valores financeiros) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                 <span className="text-xs text-neutral-400 font-semibold">PEDIDOS ATIVOS</span>
@@ -837,8 +845,6 @@ export default function ERPGrafica() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Alertas de Estoque */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center gap-2 text-amber-400 font-bold">
                   <AlertTriangle className="w-5 h-5" />
@@ -860,7 +866,6 @@ export default function ERPGrafica() {
                 )}
               </div>
 
-              {/* Pedidos no Prazo de Entrega */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center gap-2 text-amber-400 font-bold">
                   <Clock className="w-5 h-5" />
@@ -876,17 +881,11 @@ export default function ERPGrafica() {
                           <span className="text-xs text-amber-400 font-bold">{ordem.numero_pedido || '#' + ordem.id}</span>
                           <p className="font-bold text-white">{ordem.cliente} — <span className="text-neutral-400 text-xs">{ordem.produto}</span></p>
                         </div>
-                        <div className="text-right">
-                          <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg font-bold flex items-center gap-1">
-                            <Calendar className="w-3 h-3" /> {ordem.data_entrega}
-                          </span>
-                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         )}
@@ -894,513 +893,255 @@ export default function ERPGrafica() {
         {abaAtiva === 'pedidos' && (
           <div className="space-y-8">
             <div>
-              <h1 className="text-2xl font-bold">Ordens de Serviço e Pedidos</h1>
-              <p className="text-sm text-neutral-400">Gestão completa de pedidos com numeração automática, cálculos e status</p>
+              <h1 className="text-2xl font-bold">Pedidos / Ordens de Serviço</h1>
+              <p className="text-sm text-neutral-400">Gerenciamento de ordens e produção</p>
             </div>
 
-            <form onSubmit={handleAdicionarOrdem} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2 text-amber-400">Cadastrar Novo Pedido / OS</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                
+            <form onSubmit={handleAdicionarOrdem} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-6">
+              <h2 className="text-lg font-bold text-amber-400">Novo Pedido / OS</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">CLIENTE*</label>
-                  <select
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Cliente</label>
+                  <input
+                    type="text"
+                    list="lista-clientes-pedido"
                     required
+                    placeholder="Selecione ou digite o cliente..."
                     value={novaOrdem.cliente || ''}
                     onChange={(e) => handleClienteChange(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
-                  >
-                    <option value="">Selecione o cliente...</option>
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                  />
+                  <datalist id="lista-clientes-pedido">
                     {clientes.map((c) => (
-                      <option key={c.id} value={c.nome}>
-                        {c.nome} {c.telefone ? `- ${c.telefone}` : ''}
-                      </option>
+                      <option key={c.id} value={c.nome} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">TELEFONE (AUTO)</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Telefone / WhatsApp</label>
                   <input
                     type="text"
-                    readOnly
-                    placeholder="Automático"
                     value={novaOrdem.telefone_cliente || ''}
-                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-400 cursor-not-allowed"
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, telefone_cliente: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    placeholder="(00) 00000-0000"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">CNPJ / RG (AUTO)</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">CPF / CNPJ</label>
                   <input
                     type="text"
-                    readOnly
-                    placeholder="Automático"
                     value={novaOrdem.documento_cliente || ''}
-                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-400 cursor-not-allowed"
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, documento_cliente: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    placeholder="Documento"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">PRODUTO / SERVIÇO*</label>
+              {/* CAMPO DE AUTOCOMPLETAR PARA PRODUTOS E SERVIÇOS (Apenas Ativos) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Produto / Serviço (Autocompletar)</label>
                   <input
                     type="text"
-                    placeholder="Ex: Cartões de Visita"
                     required
+                    list="lista-catalogo-ativo"
+                    placeholder="Digite para buscar produto ou serviço ativo..."
                     value={novaOrdem.produto || ''}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, produto: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setNovaOrdem((prev) => ({ ...prev, produto: val }))
+                      
+                      // Tenta encontrar nos insumos/produtos ativos
+                      const prodEncontrado = insumos.find((i) => i.nome.toLowerCase() === val.toLowerCase() && i.status !== 'Inativo')
+                      if (prodEncontrado) {
+                        setNovaOrdem((prev) => ({ ...prev, valor_unitario: prodEncontrado.preco_venda }))
+                      } else {
+                        // Tenta encontrar nos serviços ativos
+                        const servEncontrado = servicos.find((s) => s.nome.toLowerCase() === val.toLowerCase() && s.status === 'Ativo')
+                        if (servEncontrado) {
+                          setNovaOrdem((prev) => ({ ...prev, valor_unitario: servEncontrado.valorVenda }))
+                        }
+                      }
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
+                  <datalist id="lista-catalogo-ativo">
+                    {insumos.filter(i => i.status !== 'Inativo').map((i) => (
+                      <option key={`prod-${i.id}`} value={i.nome}>[Produto] R$ {i.preco_venda}</option>
+                    ))}
+                    {servicos.filter(s => s.status === 'Ativo').map((s) => (
+                      <option key={`serv-${s.id}`} value={s.nome}>[{s.id} - Serviço] R$ {s.valorVenda}</option>
+                    ))}
+                  </datalist>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">QUANTIDADE*</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Detalhes / Especificações</label>
+                  <input
+                    type="text"
+                    value={novaOrdem.detalhes || ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    placeholder="Ex: Papel Couché 150g, Cor 4x0"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Quantidade</label>
                   <input
                     type="number"
                     min="1"
-                    required
-                    value={novaOrdem.quantidade ?? 1}
+                    value={novaOrdem.quantidade || 1}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, quantidade: Number(e.target.value) })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR UNITÁRIO (R$)*</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Vlr Unitário (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    required
-                    value={novaOrdem.valor_unitario ?? ''}
+                    value={novaOrdem.valor_unitario || 0}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, valor_unitario: Number(e.target.value) })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DESCONTO (R$)</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Desconto (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={novaOrdem.desconto ?? ''}
+                    value={novaOrdem.desconto || 0}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, desconto: Number(e.target.value) })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">FRETE (R$)</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Frete (R$)</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={novaOrdem.frete ?? ''}
+                    value={novaOrdem.frete || 0}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, frete: Number(e.target.value) })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR TOTAL (AUTO)</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`R$ ${calcularValorTotal(novaOrdem.quantidade, novaOrdem.valor_unitario, novaOrdem.desconto, novaOrdem.frete).toFixed(2)}`}
-                    className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-sm text-emerald-400 font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">FORMA DE PAGAMENTO</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Forma Pagamento</label>
                   <select
                     value={novaOrdem.forma_pagamento || 'PIX'}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, forma_pagamento: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   >
-                    <option value="À vista">À vista</option>
-                    <option value="Cartão Débito">Cartão Débito</option>
-                    <option value="Cartão Crédito">Cartão Crédito</option>
                     <option value="PIX">PIX</option>
                     <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Boleto">Boleto</option>
+                    <option value="Faturado">Faturado</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DE PAGAMENTO</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Status Pagto</label>
                   <select
                     value={novaOrdem.status_pagamento || 'A pagar'}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status_pagamento: e.target.value as 'Pago' | 'A pagar' })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status_pagamento: e.target.value as any })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   >
                     <option value="A pagar">A pagar</option>
                     <option value="Pago">Pago</option>
                   </select>
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DE ENTREGA</label>
-                  <select
-                    value={novaOrdem.status_entrega || 'Agendado'}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status_entrega: e.target.value as 'Entregue' | 'Agendado' })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
-                  >
-                    <option value="Agendado">Agendado</option>
-                    <option value="Entregue">Entregue</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DO PEDIDO</label>
-                  <select
-                    value={novaOrdem.status || 'Em Aberto'}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status: e.target.value as 'Em Aberto' | 'Em Andamento' | 'Finalizado' })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
-                  >
-                    <option value="Em Aberto">Em Aberto</option>
-                    <option value="Em Andamento">Em Andamento</option>
-                    <option value="Finalizado">Finalizado</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DATA DO PEDIDO</label>
-                  <input
-                    type="date"
-                    value={novaOrdem.data_pedido || ''}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, data_pedido: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DATA DE ENTREGA</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Data de Entrega Prevista</label>
                   <input
                     type="date"
                     value={novaOrdem.data_entrega || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, data_entrega: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VENDEDOR</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">Vendedor</label>
                   <input
                     type="text"
                     value={novaOrdem.vendedor || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, vendedor: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1">DETALHES / ESPECIFICAÇÕES TÉCNICAS</label>
-                <textarea
-                  placeholder="Acabamento, tipo de papel, observações..."
-                  value={novaOrdem.detalhes || ''}
-                  onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-400 text-white"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20"
-              >
-                <Plus className="w-4 h-4" /> Cadastrar Pedido com Numeração Automática
-              </button>
-            </form>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(['Em Aberto', 'Em Andamento', 'Finalizado'] as const).map((status) => (
-                <div key={status} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-                  <h3 className="font-bold text-sm tracking-wider uppercase mb-4 text-neutral-400 border-b border-neutral-800 pb-2">
-                    {status} ({ordens.filter((o) => o.status === status).length})
-                  </h3>
-                  <div className="space-y-3">
-                    {ordens
-                      .filter((o) => o.status === status)
-                      .map((ordem) => (
-                        <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 space-y-3 shadow-md">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-xs text-amber-400 font-black">{ordem.numero_pedido || `OS #${ordem.id}`}</span>
-                              <h4 className="font-bold text-white text-base">{ordem.cliente}</h4>
-                            </div>
-                            <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
-                              R$ {Number(ordem.valor).toFixed(2)}
-                            </span>
-                          </div>
-
-                          <div className="text-xs space-y-1 text-neutral-300">
-                            <p><b>Produto:</b> {ordem.produto} (Qtd: {ordem.quantidade || 1})</p>
-                            <p><b>Pagamento:</b> {ordem.forma_pagamento} • <span className={ordem.status_pagamento === 'Pago' ? 'text-emerald-400 font-bold' : 'text-amber-500 font-bold'}>{ordem.status_pagamento}</span></p>
-                            <p><b>Entrega:</b> <span className={ordem.status_entrega === 'Entregue' ? 'text-emerald-400 font-bold' : 'text-neutral-400'}>{ordem.status_entrega}</span> ({ordem.data_entrega || 'A combinar'})</p>
-                            {ordem.vendedor && <p><b>Vendedor:</b> {ordem.vendedor}</p>}
-                            {ordem.detalhes && <p className="text-neutral-400 italic mt-1">{ordem.detalhes}</p>}
-                          </div>
-                          
-                          <div className="flex items-center justify-between pt-2 border-t border-neutral-900">
-                            <button
-                              onClick={() => handleImprimirOrdem(ordem)}
-                              className="bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-amber-400/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-                              title="Imprimir Pedido em PDF"
-                            >
-                              <Printer className="w-3.5 h-3.5" /> Imprimir OS
-                            </button>
-
-                            <div className="flex items-center gap-2">
-                              {status !== 'Em Aberto' && (
-                                <button
-                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Finalizado' ? 'Em Andamento' : 'Em Aberto')}
-                                  className="text-xs text-neutral-400 hover:text-white"
-                                >
-                                  ←
-                                </button>
-                              )}
-                              {status !== 'Finalizado' && (
-                                <button
-                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Em Aberto' ? 'Em Andamento' : 'Finalizado')}
-                                  className="text-xs text-amber-400 hover:underline font-bold"
-                                >
-                                  Avançar →
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black py-3 rounded-xl transition shadow-lg shadow-amber-400/20 text-sm"
+                  >
+                    Registrar Pedido
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {abaAtiva === 'clientes' && (
-          <div className="space-y-8">
-            <div>
-              <h1 className="text-2xl font-bold">Gestão de Clientes</h1>
-              <p className="text-sm text-neutral-400">Cadastre e consulte os seus clientes</p>
-            </div>
-
-            <form onSubmit={handleAdicionarCliente} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Cadastrar Novo Cliente</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  placeholder="Nome / Empresa*"
-                  required
-                  value={novoCliente.nome || ''}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="text"
-                  placeholder="Telefone / WhatsApp*"
-                  required
-                  value={novoCliente.telefone || ''}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="text"
-                  placeholder="Pessoa de Contato"
-                  value={novoCliente.contato || ''}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, contato: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="text"
-                  placeholder="CNPJ"
-                  value={novoCliente.cnpj || ''}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="text"
-                  placeholder="E-mail"
-                  value={novoCliente.email || ''}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, email: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <button
-                  type="submit"
-                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Salvar Cliente
-                </button>
               </div>
             </form>
 
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
-              <div className="relative">
-                <Search className="w-5 h-5 absolute left-3 top-3 text-neutral-500" />
-                <input
-                  type="text"
-                  placeholder="Pesquisar cliente por nome ou telefone..."
-                  value={buscaCliente}
-                  onChange={(e) => setBuscaCliente(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-400"
-                />
-              </div>
-
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-neutral-800 font-bold">Lista de Pedidos</div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-neutral-300">
-                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
                     <tr>
-                      <th className="p-3">Nome / Empresa</th>
-                      <th className="p-3">Telefone</th>
-                      <th className="p-3">CNPJ / Documento</th>
-                      <th className="p-3">Contato</th>
-                      <th className="p-3 text-right">Ações</th>
+                      <th className="p-4">Nº Pedido</th>
+                      <th className="p-4">Cliente</th>
+                      <th className="p-4">Produto</th>
+                      <th className="p-4">Total</th>
+                      <th className="p-4">Pagamento</th>
+                      <th className="p-4">Status Produção</th>
+                      <th className="p-4 text-right">Ações</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {clientes
-                      .filter((c) => c.nome.toLowerCase().includes(buscaCliente.toLowerCase()) || c.telefone.includes(buscaCliente))
-                      .map((cliente) => (
-                        <tr key={cliente.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                          <td className="p-3 font-bold text-white">{cliente.nome}</td>
-                          <td className="p-3">{cliente.telefone}</td>
-                          <td className="p-3">{cliente.cnpj || '-'}</td>
-                          <td className="p-3">{cliente.contato || '-'}</td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={() => handleExcluirCliente(cliente.id)}
-                              className="text-red-400 hover:text-red-300 p-1"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtiva === 'estoque' && (
-          <div className="space-y-8">
-            <div>
-              <h1 className="text-2xl font-bold">Controle de Estoque</h1>
-              <p className="text-sm text-neutral-400">Gestão de materiais e papéis</p>
-            </div>
-
-            <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto / Insumo</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Nome do Produto*"
-                  required
-                  value={novoInsumo.nome || ''}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <select
-                  value={novoInsumo.unidade || 'unidade'}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, unidade: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                >
-                  <option value="unidade">Unidade</option>
-                  <option value="resma">Resma</option>
-                  <option value="caixa">Caixa</option>
-                  <option value="metros">Metros</option>
-                  <option value="m²">m²</option>
-                  <option value="folhas">Folhas</option>
-                  <option value="litros">Litros</option>
-                </select>
-                <input
-                  type="number"
-                  placeholder="Qtd Inicial"
-                  value={novoInsumo.quantidade || ''}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, quantidade: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="number"
-                  placeholder="Estoque Mínimo Alerta"
-                  value={novoInsumo.minimo || ''}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, minimo: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Preço Custo (R$)"
-                  value={novoInsumo.preco_custo || ''}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_custo: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Preço Venda (R$)"
-                  value={novoInsumo.preco_venda || ''}
-                  onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_venda: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <button
-                  type="submit"
-                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2 col-span-2"
-                >
-                  <Plus className="w-4 h-4" /> Salvar no Estoque
-                </button>
-              </div>
-            </form>
-
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-neutral-300">
-                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
-                    <tr>
-                      <th className="p-3">Produto</th>
-                      <th className="p-3">Quantidade</th>
-                      <th className="p-3">Custo</th>
-                      <th className="p-3">Venda</th>
-                      <th className="p-3">Margem</th>
-                      <th className="p-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {insumos.map((item) => (
-                      <tr key={item.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                        <td className="p-3 font-bold text-white">{item.nome}</td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                              Number(item.quantidade) <= Number(item.minimo)
-                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                : 'bg-neutral-800 text-neutral-200'
-                            }`}
-                          >
-                            {item.quantidade} {item.unidade}
+                  <tbody className="divide-y divide-neutral-800">
+                    {ordens.map((ordem) => (
+                      <tr key={ordem.id} className="hover:bg-neutral-950/50">
+                        <td className="p-4 font-mono font-bold text-amber-400">{ordem.numero_pedido || '#' + ordem.id}</td>
+                        <td className="p-4 font-bold">{ordem.cliente}</td>
+                        <td className="p-4">{ordem.produto}</td>
+                        <td className="p-4 font-bold text-emerald-400">R$ {Number(ordem.valor).toFixed(2)}</td>
+                        <td className="p-4">
+                          <span className={`text-xs px-2 py-1 rounded-lg font-bold ${ordem.status_pagamento === 'Pago' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {ordem.status_pagamento}
                           </span>
                         </td>
-                        <td className="p-3">R$ {Number(item.preco_custo).toFixed(2)}</td>
-                        <td className="p-3">R$ {Number(item.preco_venda).toFixed(2)}</td>
-                        <td className="p-3 text-emerald-400 font-bold">{item.margem_lucro}%</td>
-                        <td className="p-3 text-right space-x-2">
-                          <button
-                            onClick={() => handleAjustarEstoque(item.id, 1)}
-                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded-lg font-bold"
+                        <td className="p-4">
+                          <select
+                            value={ordem.status}
+                            onChange={(e) => handleMudarStatusOrdem(ordem.id, e.target.value as any)}
+                            className="bg-neutral-950 border border-neutral-800 text-xs rounded-lg px-2 py-1 text-white font-semibold focus:outline-none"
                           >
-                            +
-                          </button>
+                            <option value="Em Aberto">Em Aberto</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                            <option value="Finalizado">Finalizado</option>
+                          </select>
+                        </td>
+                        <td className="p-4 text-right space-x-2">
                           <button
-                            onClick={() => handleAjustarEstoque(item.id, -1)}
-                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded-lg font-bold"
+                            onClick={() => handleImprimirOrdem(ordem)}
+                            title="Imprimir Pedido / OS"
+                            className="p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-amber-400 inline-flex items-center"
                           >
-                            -
-                          </button>
-                          <button
-                            onClick={() => handleExcluirInsumo(item.id)}
-                            className="text-red-400 hover:text-red-300 p-1"
-                          >
-                            <Trash2 className="w-4 h-4 inline" />
+                            <Printer className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>
@@ -1412,101 +1153,384 @@ export default function ERPGrafica() {
           </div>
         )}
 
+        {abaAtiva === 'clientes' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Gestão de Clientes</h1>
+              <p className="text-sm text-neutral-400">Cadastro de clientes e empresas parceiras</p>
+            </div>
+
+            <form onSubmit={handleAdicionarCliente} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="text-lg font-bold text-amber-400">Novo Cliente</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  required
+                  placeholder="Nome do Cliente / Empresa"
+                  value={novoCliente.nome || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder="Telefone / WhatsApp"
+                  value={novoCliente.telefone || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="CNPJ ou RG"
+                  value={novoCliente.cnpj || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
+              >
+                Cadastrar Cliente
+              </button>
+            </form>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-neutral-800 font-bold">Clientes Cadastrados</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
+                    <tr>
+                      <th className="p-4">Nome / Empresa</th>
+                      <th className="p-4">Telefone</th>
+                      <th className="p-4">Documento</th>
+                      <th className="p-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800">
+                    {clientes.map((c) => (
+                      <tr key={c.id} className="hover:bg-neutral-950/50">
+                        <td className="p-4 font-bold">{c.nome}</td>
+                        <td className="p-4">{c.telefone}</td>
+                        <td className="p-4">{c.cnpj || c.rg || '-'}</td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleExcluirCliente(c.id)}
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {abaAtiva === 'estoque' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Catálogo</h1>
+              <p className="text-sm text-neutral-400">Gerenciamento de produtos, insumos e serviços</p>
+            </div>
+
+            {/* Sub-abas do Catálogo */}
+            <div className="flex border-b border-neutral-800 gap-4">
+              <button
+                onClick={() => setAbaCatalogo('produtos')}
+                className={`pb-3 font-bold text-sm border-b-2 transition ${
+                  abaCatalogo === 'produtos'
+                    ? 'border-amber-400 text-amber-400'
+                    : 'border-transparent text-neutral-400 hover:text-white'
+                }`}
+              >
+                📦 Produtos (Estoque)
+              </button>
+              <button
+                onClick={() => setAbaCatalogo('servicos')}
+                className={`pb-3 font-bold text-sm border-b-2 transition ${
+                  abaCatalogo === 'servicos'
+                    ? 'border-amber-400 text-amber-400'
+                    : 'border-transparent text-neutral-400 hover:text-white'
+                }`}
+              >
+                🛠️ Serviços
+              </button>
+            </div>
+
+            {/* ABA 1: PRODUTOS */}
+            {abaCatalogo === 'produtos' && (
+              <div className="space-y-6">
+                <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h2 className="text-lg font-bold text-amber-400">Novo Produto / Insumo</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nome do Item (Ex: Papel Couché A4)"
+                      value={novoInsumo.nome || ''}
+                      onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })}
+                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Quantidade Inicial"
+                      value={novoInsumo.quantidade || 0}
+                      onChange={(e) => setNovoInsumo({ ...novoInsumo, quantidade: Number(e.target.value) })}
+                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Preço de Venda (R$)"
+                      value={novoInsumo.preco_venda || 0}
+                      onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_venda: Number(e.target.value) })}
+                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <select
+                      value={novoInsumo.status || 'Ativo'}
+                      onChange={(e) => setNovoInsumo({ ...novoInsumo, status: e.target.value as any })}
+                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
+                    >
+                      <option value="Ativo">Ativo</option>
+                      <option value="Inativo">Inativo</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
+                  >
+                    Cadastrar Produto
+                  </button>
+                </form>
+
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+                  <div className="p-4 border-b border-neutral-800 font-bold">Lista de Produtos</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
+                        <tr>
+                          <th className="p-4">Nome</th>
+                          <th className="p-4">Qtd</th>
+                          <th className="p-4">Preço Venda</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800">
+                        {insumos.map((item) => (
+                          <tr key={item.id} className="hover:bg-neutral-950/50">
+                            <td className="p-4 font-bold">{item.nome}</td>
+                            <td className="p-4">{item.quantidade} {item.unidade}</td>
+                            <td className="p-4 text-emerald-400 font-bold">R$ {Number(item.preco_venda).toFixed(2)}</td>
+                            <td className="p-4">
+                              <span className={`text-xs px-2 py-1 rounded-lg font-bold ${item.status === 'Inativo' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                {item.status || 'Ativo'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => handleAjustarEstoque(item.id, 1)}
+                                className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-xs font-bold"
+                              >
+                                +1
+                              </button>
+                              <button
+                                onClick={() => handleAjustarEstoque(item.id, -1)}
+                                className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-xs font-bold"
+                              >
+                                -1
+                              </button>
+                              <button
+                                onClick={() => handleExcluirInsumo(item.id)}
+                                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition inline-flex"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ABA 2: SERVIÇOS */}
+            {abaCatalogo === 'servicos' && (
+              <div className="space-y-6">
+                <form onSubmit={handleAdicionarServico} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h2 className="text-lg font-bold text-amber-400">Novo Serviço</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Código Automático</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={gerarProximoCodigoServico()}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-amber-400 font-mono font-bold w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Nome do Serviço</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Criação de Arte"
+                        value={novoServico.nome}
+                        onChange={(e) => setNovoServico({ ...novoServico, nome: e.target.value })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Unidade</label>
+                      <select
+                        value={novoServico.unidade}
+                        onChange={(e) => setNovoServico({ ...novoServico, unidade: e.target.value })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      >
+                        <option value="Unidade">Unidade</option>
+                        <option value="Caixa">Caixa</option>
+                        <option value="Resma">Resma</option>
+                        <option value="Cento">Cento</option>
+                        <option value="Milheiro">Milheiro</option>
+                        <option value="m²">m²</option>
+                        <option value="Hora">Hora</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Valor de Venda (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="0,00"
+                        value={novoServico.valorVenda}
+                        onChange={(e) => setNovoServico({ ...novoServico, valorVenda: e.target.value })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-4 items-center">
+                    <div className="w-48">
+                      <label className="block text-xs text-neutral-400 mb-1">Status</label>
+                      <select
+                        value={novoServico.status}
+                        onChange={(e) => setNovoServico({ ...novoServico, status: e.target.value as any })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      >
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="mt-5 bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
+                    >
+                      Cadastrar Serviço
+                    </button>
+                  </div>
+                </form>
+
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+                  <div className="p-4 border-b border-neutral-800 font-bold">Serviços Cadastrados</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
+                        <tr>
+                          <th className="p-4">Código</th>
+                          <th className="p-4">Nome</th>
+                          <th className="p-4">Unidade</th>
+                          <th className="p-4">Valor Venda</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800">
+                        {servicos.map((s) => (
+                          <tr key={s.id} className="hover:bg-neutral-950/50">
+                            <td className="p-4 font-mono font-bold text-amber-400">{s.id}</td>
+                            <td className="p-4 font-bold">{s.nome}</td>
+                            <td className="p-4">{s.unidade}</td>
+                            <td className="p-4 text-emerald-400 font-bold">R$ {s.valorVenda.toFixed(2)}</td>
+                            <td className="p-4">
+                              <span className={`text-xs px-2 py-1 rounded-lg font-bold ${s.status === 'Inativo' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                {s.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => {
+                                  setServicos(servicos.map(item => item.id === s.id ? { ...item, status: item.status === 'Ativo' ? 'Inativo' : 'Ativo' } : item))
+                                }}
+                                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-xs rounded-lg font-bold"
+                              >
+                                Alternar Status
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {abaAtiva === 'financeiro' && (
           <div className="space-y-8">
             <div>
-              <h1 className="text-2xl font-bold">Dashboard Financeiro & Caixa</h1>
-              <p className="text-sm text-neutral-400">Área restrita de controle de receitas, despesas e saldo em caixa</p>
+              <h1 className="text-2xl font-bold">Controle Financeiro</h1>
+              <p className="text-sm text-neutral-400">Fluxo de caixa e movimentações</p>
             </div>
 
-            {/* Cards do Dashboard Financeiro com Saldo e Receitas */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">TOTAL ENTRADAS</span>
+                <p className="text-3xl font-black mt-2 text-emerald-400">R$ {totalEntradas.toFixed(2)}</p>
+              </div>
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">TOTAL SAÍDAS</span>
+                <p className="text-3xl font-black mt-2 text-red-400">R$ {totalSaidas.toFixed(2)}</p>
+              </div>
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                 <span className="text-xs text-neutral-400 font-semibold">SALDO EM CAIXA</span>
-                <p className={`text-2xl font-black mt-2 ${saldoTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <p className={`text-3xl font-black mt-2 ${saldoTotal >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                   R$ {saldoTotal.toFixed(2)}
                 </p>
               </div>
-
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                <span className="text-xs text-neutral-400 font-semibold">TOTAL DE RECEITAS</span>
-                <p className="text-2xl font-black mt-2 text-emerald-400">R$ {totalEntradas.toFixed(2)}</p>
-              </div>
-
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                <span className="text-xs text-neutral-400 font-semibold">TOTAL DE SAÍDAS</span>
-                <p className="text-2xl font-black mt-2 text-red-400">R$ {totalSaidas.toFixed(2)}</p>
-              </div>
             </div>
 
-            <form onSubmit={handleAdicionarFinanceiro} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Novo Lançamento Financeiro</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Descrição*"
-                  required
-                  value={novoFinanceiro.descricao || ''}
-                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, descricao: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <select
-                  value={novoFinanceiro.tipo || 'Entrada'}
-                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, tipo: e.target.value as 'Entrada' | 'Saída' })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                >
-                  <option value="Entrada">Entrada (+)</option>
-                  <option value="Saída">Saída (-)</option>
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Valor (R$)*"
-                  required
-                  value={novoFinanceiro.valor || ''}
-                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, valor: Number(e.target.value) })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <button
-                  type="submit"
-                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Lançar
-                </button>
-              </div>
-            </form>
-
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-neutral-800 font-bold">Histórico de Movimentações</div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-neutral-300">
-                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
                     <tr>
-                      <th className="p-3">Data</th>
-                      <th className="p-3">Descrição</th>
-                      <th className="p-3">Tipo</th>
-                      <th className="p-3 text-right">Valor</th>
+                      <th className="p-4">Data</th>
+                      <th className="p-4">Descrição</th>
+                      <th className="p-4">Tipo</th>
+                      <th className="p-4 text-right">Valor</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {financeiro.map((item) => (
-                      <tr key={item.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                        <td className="p-3 text-neutral-400">{item.data}</td>
-                        <td className="p-3 font-bold text-white">{item.descricao}</td>
-                        <td className="p-3">
-                          <span
-                            className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                              item.tipo === 'Entrada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                            }`}
-                          >
-                            {item.tipo}
+                  <tbody className="divide-y divide-neutral-800">
+                    {financeiro.map((f) => (
+                      <tr key={f.id} className="hover:bg-neutral-950/50">
+                        <td className="p-4">{f.data}</td>
+                        <td className="p-4 font-bold">{f.descricao}</td>
+                        <td className="p-4">
+                          <span className={`text-xs px-2 py-1 rounded-lg font-bold ${f.tipo === 'Entrada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {f.tipo}
                           </span>
                         </td>
-                        <td
-                          className={`p-3 text-right font-bold ${
-                            item.tipo === 'Entrada' ? 'text-emerald-400' : 'text-red-400'
-                          }`}
-                        >
-                          {item.tipo === 'Entrada' ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
+                        <td className={`p-4 text-right font-bold ${f.tipo === 'Entrada' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {f.tipo === 'Entrada' ? '+' : '-'} R$ {Number(f.valor).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -1520,94 +1544,76 @@ export default function ERPGrafica() {
         {abaAtiva === 'usuarios' && (
           <div className="space-y-8">
             <div>
-              <h1 className="text-2xl font-bold">Gestão de Usuários e Permissões</h1>
-              <p className="text-sm text-neutral-400">Controle de acesso por Nome, Senha e Nível de Privilégio</p>
+              <h1 className="text-2xl font-bold">Controle de Usuários e Permissões</h1>
+              <p className="text-sm text-neutral-400">Gerencie quem pode acessar cada área do sistema</p>
             </div>
 
             <form onSubmit={handleSalvarUsuario} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className="font-bold text-lg">
-                  {usuarioEditandoId !== null ? 'Editar Usuário / Redefinir Senha' : 'Cadastrar Novo Usuário'}
-                </h2>
-                {usuarioEditandoId !== null && (
-                  <button
-                    type="button"
-                    onClick={handleCancelarEdicao}
-                    className="text-xs text-neutral-400 hover:text-white underline"
-                  >
-                    Cancelar Edição
-                  </button>
-                )}
-              </div>
-
+              <h2 className="text-lg font-bold text-amber-400">
+                {usuarioEditandoId !== null ? 'Editar Usuário' : 'Novo Usuário'}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input
                   type="text"
-                  placeholder="Nome de Usuário (Ex: Administrador)*"
                   required
+                  placeholder="Nome de Usuário"
                   value={nomeUsuario}
                   onChange={(e) => setNomeUsuario(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                 />
                 <input
-                  type="text"
-                  placeholder="Senha / Redefinir Senha*"
+                  type="password"
                   required
+                  placeholder="Senha"
                   value={senhaUsuario}
                   onChange={(e) => setSenhaUsuario(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                 />
                 <input
                   type="text"
-                  placeholder="Cargo / Nível (Ex: Administrador, Operador)"
+                  placeholder="Cargo (Ex: Gerente, Operador)"
                   value={cargoUsuario}
                   onChange={(e) => setCargoUsuario(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-2">NÍVEL DE PRIVILÉGIO (PERMISSÕES DE ACESSO)</label>
-                <div className="flex flex-wrap gap-3">
+                <label className="block text-xs font-semibold text-neutral-400 mb-2">Permissões de Acesso</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     { id: 'dashboard', label: 'Dashboard' },
                     { id: 'pedidos', label: 'Pedidos / OS' },
                     { id: 'clientes', label: 'Clientes' },
-                    { id: 'estoque', label: 'Estoque' },
+                    { id: 'estoque', label: 'Catálogo' },
                     { id: 'financeiro', label: 'Financeiro' },
                     { id: 'usuarios', label: 'Usuários' }
-                  ].map((p) => {
-                    const marcado = permissoesUsuario.includes(p.id)
-                    return (
-                      <button
-                        type="button"
-                        key={p.id}
-                        onClick={() => togglePermissao(p.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                          marcado
-                            ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
-                            : 'bg-neutral-950 text-neutral-500 border-neutral-800'
-                        }`}
-                      >
-                        {p.label} {marcado ? '✓' : '+'}
-                      </button>
-                    )
-                  })}
+                  ].map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 bg-neutral-950 border border-neutral-800 p-3 rounded-xl cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={permissoesUsuario.includes(p.id)}
+                        onChange={() => togglePermissao(p.id)}
+                        className="accent-amber-400"
+                      />
+                      {p.label}
+                    </label>
+                  ))}
                 </div>
               </div>
 
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2.5 rounded-xl transition flex items-center justify-center gap-2"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
                 >
-                  <Plus className="w-4 h-4" /> {usuarioEditandoId !== null ? 'Atualizar Usuário' : 'Cadastrar Usuário'}
+                  {usuarioEditandoId !== null ? 'Salvar Alterações' : 'Criar Usuário'}
                 </button>
                 {usuarioEditandoId !== null && (
                   <button
                     type="button"
                     onClick={handleCancelarEdicao}
-                    className="bg-neutral-950 hover:bg-neutral-800 text-white font-bold px-6 py-2.5 rounded-xl transition border border-neutral-800"
+                    className="bg-neutral-800 text-white font-bold px-6 py-3 rounded-xl transition text-sm"
                   >
                     Cancelar
                   </button>
@@ -1615,46 +1621,34 @@ export default function ERPGrafica() {
               </div>
             </form>
 
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-neutral-800 font-bold">Usuários Cadastrados</div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-neutral-300">
-                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-neutral-950 text-neutral-400 text-xs uppercase">
                     <tr>
-                      <th className="p-3">Nome de Usuário</th>
-                      <th className="p-3">Cargo / Nível</th>
-                      <th className="p-3">Permissões</th>
-                      <th className="p-3 text-right">Ações (Editar / Excluir)</th>
+                      <th className="p-4">Nome</th>
+                      <th className="p-4">Cargo</th>
+                      <th className="p-4">Permissões</th>
+                      <th className="p-4 text-right">Ações</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-neutral-800">
                     {usuarios.map((u) => (
-                      <tr key={u.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                        <td className="p-3 font-bold text-white flex items-center gap-2">
-                          <Users className="w-4 h-4 text-amber-400" />
-                          {u.nome}
-                        </td>
-                        <td className="p-3 font-medium text-amber-400">{u.cargo}</td>
-                        <td className="p-3">
-                          <div className="flex flex-wrap gap-1">
-                            {u.permissoes && u.permissoes.map((p) => (
-                              <span key={p} className="bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded text-xs">
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-3 text-right space-x-2">
+                      <tr key={u.id} className="hover:bg-neutral-950/50">
+                        <td className="p-4 font-bold">{u.nome}</td>
+                        <td className="p-4">{u.cargo}</td>
+                        <td className="p-4 text-xs text-neutral-400">{u.permissoes?.join(', ')}</td>
+                        <td className="p-4 text-right space-x-2">
                           <button
                             onClick={() => handleIniciarEdicaoUsuario(u)}
-                            className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold transition inline-flex items-center gap-1"
-                            title="Editar Dados ou Redefinir Senha"
+                            className="p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-amber-400 inline-flex"
                           >
-                            <Edit3 className="w-3.5 h-3.5" /> Editar
+                            <Edit3 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleExcluirUsuario(u.id)}
-                            className="text-red-400 hover:text-red-300 p-1.5 inline-flex items-center"
-                            title="Excluir Usuário"
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition inline-flex"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
