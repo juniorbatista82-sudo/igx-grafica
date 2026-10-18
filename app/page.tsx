@@ -15,7 +15,9 @@ import {
   Search,
   LogOut,
   Edit3,
-  Printer
+  Printer,
+  Calendar,
+  Clock
 } from 'lucide-react'
 
 type Usuario = {
@@ -61,7 +63,7 @@ type OrdemServico = {
   valor_unitario: number
   desconto: number
   frete: number
-  valor: number // Valor Total calculado
+  valor: number
   forma_pagamento: string
   status_pagamento: 'Pago' | 'A pagar'
   status_entrega: 'Entregue' | 'Agendado'
@@ -416,14 +418,7 @@ export default function ERPGrafica() {
   }
 
   const handleMudarStatusOrdem = async (id: number, novoStatus: 'Em Aberto' | 'Em Andamento' | 'Finalizado') => {
-    const ordem = ordens.find((o) => o.id === id)
-    if (!ordem) return
-
     await supabase.from('ordens').update({ status: novoStatus }).eq('id', id)
-
-    if (novoStatus === 'Finalizado' && ordem.status !== 'Finalizado' && ordem.status_pagamento === 'Pago') {
-      // Já está pago ou gerencia financeiro
-    }
   }
 
   const handleImprimirOrdem = (ordem: OrdemServico) => {
@@ -605,6 +600,11 @@ export default function ERPGrafica() {
 
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
+
+  const hojeStr = new Date().toISOString().split('T')[0]
+  const pedidosNoPrazo = ordens.filter(
+    (o) => o.status !== 'Finalizado' && o.data_entrega && o.data_entrega <= hojeStr
+  )
 
   if (!usuarioAtual) {
     return (
@@ -847,21 +847,59 @@ export default function ERPGrafica() {
               </div>
             </div>
 
-            {alertasEstoque.length > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
-                <div className="flex items-center gap-3 text-amber-400 font-bold mb-3">
+            {/* Alertas de Estoque e Prazos de Entrega no Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Alertas de Estoque */}
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2 text-amber-400 font-bold">
                   <AlertTriangle className="w-5 h-5" />
-                  Atenção: Itens com Estoque Abaixo do Mínimo
+                  <h2>Estoque Abaixo do Mínimo ({alertasEstoque.length})</h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {alertasEstoque.map((item) => (
-                    <div key={item.id} className="bg-neutral-900/80 p-3 rounded-xl border border-neutral-800 text-sm">
-                      <span className="font-bold">{item.nome}</span>: {item.quantidade} {item.unidade} (Mín: {item.minimo})
-                    </div>
-                  ))}
-                </div>
+                {alertasEstoque.length === 0 ? (
+                  <p className="text-xs text-neutral-400">Nenhum item com estoque crítico no momento.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {alertasEstoque.map((item) => (
+                      <div key={item.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 flex justify-between items-center text-sm">
+                        <span className="font-bold text-white">{item.nome}</span>
+                        <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-1 rounded-lg font-bold">
+                          {item.quantidade} {item.unidade} (Mín: {item.minimo})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Pedidos no Prazo de Entrega */}
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2 text-amber-400 font-bold">
+                  <Clock className="w-5 h-5" />
+                  <h2>Pedidos Próximos ou no Prazo de Entrega ({pedidosNoPrazo.length})</h2>
+                </div>
+                {pedidosNoPrazo.length === 0 ? (
+                  <p className="text-xs text-neutral-400">Nenhum pedido pendente com entrega para hoje ou vencida.</p>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {pedidosNoPrazo.map((ordem) => (
+                      <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 flex justify-between items-center text-sm">
+                        <div>
+                          <span className="text-xs text-amber-400 font-bold">{ordem.numero_pedido || '#' + ordem.id}</span>
+                          <p className="font-bold text-white">{ordem.cliente} — <span className="text-neutral-400 text-xs">{ordem.produto}</span></p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg font-bold flex items-center gap-1">
+                            <Calendar className="w-3 h-3" /> {ordem.data_entrega}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
