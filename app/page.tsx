@@ -888,7 +888,7 @@ export default function ERPGrafica() {
             </div>
 
             <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto / Insumo</h2>
+              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input
                   type="text"
@@ -1151,7 +1151,7 @@ export default function ERPGrafica() {
                     { id: 'dashboard', label: 'Dashboard' },
                     { id: 'pedidos', label: 'Pedidos / OS' },
                     { id: 'clientes', label: 'Clientes' },
-                    { id: 'estoque', label: 'Estoque / Insumos' },
+                    { id: 'estoque', label: 'Estoque' },
                     { id: 'financeiro', label: 'Financeiro' },
                     { id: 'usuarios', label: 'Usuários' }
                   ].map((p) => {
