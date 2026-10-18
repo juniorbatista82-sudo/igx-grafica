@@ -138,6 +138,8 @@ export default function ERPGrafica() {
   }, [])
 
   const [novoCliente, setNovoCliente] = useState<Partial<Cliente>>({})
+  
+  // Estados para Produto/Insumo
   const [novoInsumo, setNovoInsumo] = useState<Partial<Insumo>>({
     unidade: 'unidade',
     quantidade: 0,
@@ -147,6 +149,7 @@ export default function ERPGrafica() {
     minimo: 5,
     status: 'Ativo'
   })
+  const [insumoEditandoId, setInsumoEditandoId] = useState<number | null>(null)
 
   // Formulário de novo/editar Serviço
   const [novoServico, setNovoServico] = useState({
@@ -379,7 +382,27 @@ export default function ERPGrafica() {
     }
   }
 
-  const handleAdicionarInsumo = async (e: React.FormEvent) => {
+  // GERENCIAMENTO DE PRODUTOS / INSUMOS
+  const handleIniciarEdicaoInsumo = (item: Insumo) => {
+    setInsumoEditandoId(item.id)
+    setNovoInsumo({
+      nome: item.nome,
+      quantidade: item.quantidade,
+      unidade: item.unidade,
+      preco_custo: item.preco_custo,
+      preco_venda: item.preco_venda,
+      margem_lucro: item.margem_lucro,
+      minimo: item.minimo,
+      status: item.status || 'Ativo'
+    })
+  }
+
+  const handleCancelarEdicaoInsumo = () => {
+    setInsumoEditandoId(null)
+    setNovoInsumo({ unidade: 'unidade', quantidade: 0, preco_custo: 0, preco_venda: 0, margem_lucro: 0, minimo: 5, status: 'Ativo' })
+  }
+
+  const handleSalvarInsumo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoInsumo.nome) {
       alert('Nome do produto é obrigatório!')
@@ -390,19 +413,37 @@ export default function ERPGrafica() {
     const venda = Number(novoInsumo.preco_venda || 0)
     const margem = custo > 0 ? ((venda - custo) / custo) * 100 : 0
 
-    const item = {
-      id: Date.now(),
-      nome: novoInsumo.nome,
-      quantidade: Number(novoInsumo.quantidade || 0),
-      unidade: novoInsumo.unidade || 'unidade',
-      preco_custo: custo,
-      preco_venda: venda,
-      margem_lucro: Number(margem.toFixed(2)),
-      minimo: Number(novoInsumo.minimo || 5),
-      status: novoInsumo.status || 'Ativo'
+    if (insumoEditandoId !== null) {
+      await supabase
+        .from('insumos')
+        .update({
+          nome: novoInsumo.nome,
+          quantidade: Number(novoInsumo.quantidade || 0),
+          unidade: novoInsumo.unidade || 'unidade',
+          preco_custo: custo,
+          preco_venda: venda,
+          margem_lucro: Number(margem.toFixed(2)),
+          minimo: Number(novoInsumo.minimo || 5),
+          status: novoInsumo.status || 'Ativo'
+        })
+        .eq('id', insumoEditandoId)
+
+      setInsumoEditandoId(null)
+    } else {
+      const item = {
+        id: Date.now(),
+        nome: novoInsumo.nome,
+        quantidade: Number(novoInsumo.quantidade || 0),
+        unidade: novoInsumo.unidade || 'unidade',
+        preco_custo: custo,
+        preco_venda: venda,
+        margem_lucro: Number(margem.toFixed(2)),
+        minimo: Number(novoInsumo.minimo || 5),
+        status: novoInsumo.status || 'Ativo'
+      }
+      await supabase.from('insumos').insert([item])
     }
 
-    await supabase.from('insumos').insert([item])
     setNovoInsumo({ unidade: 'unidade', quantidade: 0, preco_custo: 0, preco_venda: 0, margem_lucro: 0, minimo: 5, status: 'Ativo' })
   }
 
@@ -1302,50 +1343,76 @@ export default function ERPGrafica() {
               </button>
             </div>
 
-            {/* ABA 1: PRODUTOS */}
+            {/* ABA 1: PRODUTOS / ESTOQUE */}
             {abaCatalogo === 'produtos' && (
               <div className="space-y-6">
-                <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h2 className="text-lg font-bold text-amber-400">Novo Produto / Insumo</h2>
+                <form onSubmit={handleSalvarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h2 className="text-lg font-bold text-amber-400">
+                    {insumoEditandoId !== null ? 'Editar Produto / Insumo' : 'Novo Produto / Insumo'}
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nome do Item (Ex: Papel Couché A4)"
-                      value={novoInsumo.nome || ''}
-                      onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Quantidade Inicial"
-                      value={novoInsumo.quantidade || 0}
-                      onChange={(e) => setNovoInsumo({ ...novoInsumo, quantidade: Number(e.target.value) })}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Preço de Venda (R$)"
-                      value={novoInsumo.preco_venda || 0}
-                      onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_venda: Number(e.target.value) })}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
-                    />
-                    <select
-                      value={novoInsumo.status || 'Ativo'}
-                      onChange={(e) => setNovoInsumo({ ...novoInsumo, status: e.target.value as any })}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400"
-                    >
-                      <option value="Ativo">Ativo</option>
-                      <option value="Inativo">Inativo</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Nome do Item</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Papel Couché A4"
+                        value={novoInsumo.nome || ''}
+                        onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Quantidade</label>
+                      <input
+                        type="number"
+                        placeholder="Quantidade Inicial"
+                        value={novoInsumo.quantidade || 0}
+                        onChange={(e) => setNovoInsumo({ ...novoInsumo, quantidade: Number(e.target.value) })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Preço de Venda (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={novoInsumo.preco_venda || 0}
+                        onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_venda: Number(e.target.value) })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Status</label>
+                      <select
+                        value={novoInsumo.status || 'Ativo'}
+                        onChange={(e) => setNovoInsumo({ ...novoInsumo, status: e.target.value as any })}
+                        className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-400 w-full"
+                      >
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                      </select>
+                    </div>
                   </div>
-                  <button
-                    type="submit"
-                    className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
-                  >
-                    Cadastrar Produto
-                  </button>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
+                    >
+                      {insumoEditandoId !== null ? 'Salvar Alterações' : 'Cadastrar Produto'}
+                    </button>
+                    {insumoEditandoId !== null && (
+                      <button
+                        type="button"
+                        onClick={handleCancelarEdicaoInsumo}
+                        className="bg-neutral-800 text-white font-bold px-6 py-3 rounded-xl transition text-sm"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
@@ -1373,6 +1440,13 @@ export default function ERPGrafica() {
                               </span>
                             </td>
                             <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => handleIniciarEdicaoInsumo(item)}
+                                title="Editar Produto"
+                                className="p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-amber-400 inline-flex items-center"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => handleAjustarEstoque(item.id, 1)}
                                 className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-xs font-bold"
