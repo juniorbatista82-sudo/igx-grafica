@@ -594,6 +594,22 @@ export default function ERPGrafica() {
     if (confirm('Deseja excluir este usuário?')) {
       await supabase.from('usuarios').delete().eq('id', id)
     }
+    
+  }
+const handleIniciarEdicaoUsuario = (u: Usuario) => {
+    setUsuarioEditandoId(u.id)
+    setNomeUsuario(u.nome)
+    setSenhaUsuario(u.senha || '')
+    setCargoUsuario(u.cargo || 'Operador')
+    setPermissoesUsuario(u.permissoes || ['dashboard'])
+  }
+
+  const handleCancelarEdicao = () => {
+    setUsuarioEditandoId(null)
+    setNomeUsuario('')
+    setSenhaUsuario('')
+    setCargoUsuario('Operador')
+    setPermissoesUsuario(['dashboard'])
   }
 
   const togglePermissao = (perm: string) => {
