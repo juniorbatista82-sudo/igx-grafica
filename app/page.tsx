@@ -1,1065 +1,1143 @@
-'use client';
-import { useState, useEffect } from 'react';
+'use client'
 
-type Permissao = 'dashboard' | 'pedidos' | 'clientes' | 'estoque' | 'financeiro' | 'usuarios';
+import React, { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import {
+  Users,
+  Package,
+  FileText,
+  DollarSign,
+  UserCheck,
+  TrendingUp,
+  AlertTriangle,
+  Plus,
+  Trash2,
+  Search,
+  LogOut,
+  Printer,
+  Layers,
+  Palette
+} from 'lucide-react'
 
-interface Usuario {
-  id: number;
-  nome: string;
-  email: string;
-  senha: string;
-  cargo: string;
-  permissoes: Permissao[];
+// ==================== TIPOS DE DADOS ====================
+type Usuario = {
+  id: number
+  nome: string
+  email: string
+  senha?: string
+  cargo: string
+  permissoes: string[]
 }
 
-interface Cliente {
-  id: number;
-  nome: string;      // Nome / Empresa (Obrigatório)
-  telefone: string;  // Telefone / WhatsApp (Obrigatório)
-  cnpj: string;      // CNPJ
-  rg: string;        // RG
-  contato: string;   // Contato (Nome da pessoa de contato)
-  email: string;     // E-mail
-  endereco: string;  // Endereço completo
+type Cliente = {
+  id: number
+  nome: string
+  telefone: string
+  cnpj?: string
+  rg?: string
+  contato?: string
+  email?: string
+  endereco?: string
 }
 
-interface OrdemServico {
-  id: number;
-  cliente: string;
-  produto: string;
-  detalhes: string;
-  valor: number;
-  status: 'Aberto' | 'Em Andamento' | 'Finalizado';
-  data: string;
+type Insumo = {
+  id: number
+  nome: string
+  quantidade: number
+  unidade: string
+  preco_custo: number
+  preco_venda: number
+  margem_lucro: number
+  minimo: number
 }
 
-interface Insumo {
-  id: number;
-  nome: string;
-  quantidade: number;
-  unidade: string;
-  precoCusto: number;
-  precoVenda: number;
-  margemLucro: number;
-  minimo: number;
+type OrdemServico = {
+  id: number
+  cliente: string
+  produto: string
+  detalhes: string
+  valor: number
+  status: 'Aberto' | 'Em Andamento' | 'Concluído'
+  data: string
 }
 
-interface FinanceiroItem {
-  id: number;
-  descricao: string;
-  tipo: 'Entrada' | 'Saida';
-  valor: number;
-  data: string;
+type FinanceiroItem = {
+  id: number
+  descricao: string
+  tipo: 'Entrada' | 'Saída'
+  valor: number
+  data: string
 }
 
-const ADMIN_DEFAULT: Usuario = {
-  id: 1,
-  nome: 'Administrador IGX',
-  email: 'admin@igxgrafica.com',
-  senha: 'admin123',
-  cargo: 'Administrador Master',
-  permissoes: ['dashboard', 'pedidos', 'clientes', 'estoque', 'financeiro', 'usuarios']
-};
+export default function ERPGrafica() {
+  // ==================== ESTADOS DE AUTENTICAÇÃO ====================
+  const [usuarioAtual, setUsuarioAtual] = useState<Usuario | null>(null)
+  const [emailLogin, setEmailLogin] = useState('')
+  const [senhaLogin, setSenhaLogin] = useState('')
+  const [erroLogin, setErroLogin] = useState('')
 
-export default function Home() {
-  // Estado de Autenticação / Login
-  const [usuarios, setUsuarios] = useState<Usuario[]>([ADMIN_DEFAULT]);
-  const [usuarioLogado, setUsuarioLogado] = useState<Usuario | null>(null);
-  
-  // Form de Login
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginSenha, setLoginSenha] = useState('');
-  const [erroLogin, setErroLogin] = useState('');
+  // ==================== ESTADO DA ABA ATIVA ====================
+  const [abaAtiva, setAbaAtiva] = useState<string>('dashboard')
 
-  const [abaAtiva, setAbaAtiva] = useState<Permissao>('dashboard');
+  // ==================== ESTADOS DOS DADOS ====================
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [insumos, setInsumos] = useState<Insumo[]>([])
+  const [ordens, setOrdens] = useState<OrdemServico[]>([])
+  const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Estados dos Dados do Sistema
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [ordens, setOrdens] = useState<OrdemServico[]>([]);
-  const [insumos, setInsumos] = useState<Insumo[]>([]);
-  const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([]);
+  // ==================== FILTROS E PESQUISAS ====================
+  const [buscaCliente, setBuscaCliente] = useState('')
 
-  // Busca no Estoque
-  const [buscaEstoque, setBuscaEstoque] = useState('');
+  // ==================== ESTADOS DOS FORMULÁRIOS ====================
+  const [novoCliente, setNovoCliente] = useState<Partial<Cliente>>({})
+  const [novoInsumo, setNovoInsumo] = useState<Partial<Insumo>>({
+    unidade: 'unidade',
+    quantidade: 0,
+    preco_custo: 0,
+    preco_venda: 0,
+    margem_lucro: 0,
+    minimo: 5
+  })
+  const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({ status: 'Aberto' })
+  const [novoFinanceiro, setNovoFinanceiro] = useState<Partial<FinanceiroItem>>({ tipo: 'Entrada' })
+  const [novoUsuario, setNovoUsuario] = useState<Partial<Usuario>>({ permissoes: ['dashboard'] })
 
-  // Form de Novo/Edição de Usuário
-  const [editandoId, setEditandoId] = useState<number | null>(null);
-  const [nomeUser, setNomeUser] = useState('');
-  const [emailUser, setEmailUser] = useState('');
-  const [senhaUser, setSenhaUser] = useState('');
-  const [cargoUser, setCargoUser] = useState('Atendente');
-  const [permSel, setPermSel] = useState<Permissao[]>(['pedidos', 'clientes']);
-
-  // Form de Estoque Completo
-  const [nomeInsumo, setNomeInsumo] = useState('');
-  const [qtdInsumo, setQtdInsumo] = useState<number>(10);
-  const [unidadeInsumo, setUnidadeInsumo] = useState('unidade');
-  const [precoCustoInsumo, setPrecoCustoInsumo] = useState<number>(10);
-  const [precoVendaInsumo, setPrecoVendaInsumo] = useState<number>(20);
-  const [margemLucroInsumo, setMargemLucroInsumo] = useState<number>(100);
-  const [minInsumo, setMinInsumo] = useState<number>(5);
-
-  // Form Orçamento
-  const [clienteSel, setClienteSel] = useState<string>('');
-  const [tipoProduto, setTipoProduto] = useState<string>('lona');
-  const [largura, setLargura] = useState<number>(1);
-  const [altura, setAltura] = useState<number>(1);
-  const [quantidade, setQuantidade] = useState<number>(10);
-  const [precoUnidade, setPrecoUnidade] = useState<number>(50);
-
-  // Form Cliente Completo
-  const [cliNome, setCliNome] = useState('');
-  const [cliTel, setCliTel] = useState('');
-  const [cliCnpj, setCliCnpj] = useState('');
-  const [cliRg, setCliRg] = useState('');
-  const [cliContato, setCliContato] = useState('');
-  const [cliEmail, setCliEmail] = useState('');
-  const [cliEndereco, setCliEndereco] = useState('');
-
-  // Carregar dados salvos ao iniciar
+  // ==================== CARREGAMENTO E SINC. EM TEMPO REAL ====================
   useEffect(() => {
-    try {
-      const u = localStorage.getItem('igx_usuarios');
-      if (u) {
-        const parsed: Usuario[] = JSON.parse(u);
-        if (parsed.length > 0) setUsuarios(parsed);
-      }
+    fetchTodosDados()
 
-      const session = localStorage.getItem('igx_sessao');
-      if (session) {
-        setUsuarioLogado(JSON.parse(session));
-      }
+    const channel = supabase
+      .channel('erp-realtime-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, () => fetchUsuarios())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => fetchClientes())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'insumos' }, () => fetchInsumos())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens' }, () => fetchOrdens())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'financeiro' }, () => fetchFinanceiro())
+      .subscribe()
 
-      const c = localStorage.getItem('igx_clientes'); if (c) setClientes(JSON.parse(c));
-      const o = localStorage.getItem('igx_ordens'); if (o) setOrdens(JSON.parse(o));
-      const i = localStorage.getItem('igx_insumos');
-      if (i) setInsumos(JSON.parse(i)); else {
-        const defInsumos: Insumo[] = [
-          { id: 1, nome: 'Bobina Lona 440g', quantidade: 50, unidade: 'm', precoCusto: 18.50, precoVenda: 35.00, margemLucro: 89.18, minimo: 10 },
-          { id: 2, nome: 'Papel Couché 150g A4', quantidade: 10, unidade: 'resma', precoCusto: 45.00, precoVenda: 90.00, margemLucro: 100.00, minimo: 2 },
-          { id: 3, nome: 'Caixa de Canetas Personalizadas', quantidade: 5, unidade: 'caixa', precoCusto: 120.00, precoVenda: 250.00, margemLucro: 108.33, minimo: 2 }
-        ];
-        setInsumos(defInsumos);
-      }
-      const f = localStorage.getItem('igx_financeiro'); if (f) setFinanceiro(JSON.parse(f));
-    } catch (e) {
-      console.error("Erro ao carregar dados:", e);
+    return () => {
+      supabase.removeChannel(channel)
     }
-  }, []);
+  }, [])
 
-  // Salvar alterações
-  useEffect(() => { localStorage.setItem('igx_usuarios', JSON.stringify(usuarios)); }, [usuarios]);
-  useEffect(() => { localStorage.setItem('igx_clientes', JSON.stringify(clientes)); }, [clientes]);
-  useEffect(() => { localStorage.setItem('igx_ordens', JSON.stringify(ordens)); }, [ordens]);
-  useEffect(() => { localStorage.setItem('igx_insumos', JSON.stringify(insumos)); }, [insumos]);
-  useEffect(() => { localStorage.setItem('igx_financeiro', JSON.stringify(financeiro)); }, [financeiro]);
+  const fetchTodosDados = async () => {
+    setLoading(true)
+    await Promise.all([
+      fetchUsuarios(),
+      fetchClientes(),
+      fetchInsumos(),
+      fetchOrdens(),
+      fetchFinanceiro()
+    ])
+    setLoading(false)
+  }
 
-  // Recalcular margem de lucro quando o custo ou venda mudarem no form de estoque
-  const handleAtualizarPrecosEstoque = (custo: number, venda: number) => {
-    setPrecoCustoInsumo(custo);
-    setPrecoVendaInsumo(venda);
-    if (custo > 0) {
-      const margem = ((venda - custo) / custo) * 100;
-      setMargemLucroInsumo(Number(margem.toFixed(2)));
-    }
-  };
+  const fetchUsuarios = async () => {
+    const { data } = await supabase.from('usuarios').select('*').order('id', { ascending: true })
+    if (data) setUsuarios(data)
+  }
 
-  const handleAtualizarMargemLucro = (margem: number) => {
-    setMargemLucroInsumo(margem);
-    if (precoCustoInsumo > 0) {
-      const novaVenda = precoCustoInsumo + (precoCustoInsumo * (margem / 100));
-      setPrecoVendaInsumo(Number(novaVenda.toFixed(2)));
-    }
-  };
+  const fetchClientes = async () => {
+    const { data } = await supabase.from('clientes').select('*').order('id', { ascending: false })
+    if (data) setClientes(data)
+  }
 
-  // Login e Logout
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErroLogin('');
-    
-    const user = usuarios.find(u => 
-      (u.email.toLowerCase() === loginEmail.trim().toLowerCase() || u.nome.toLowerCase() === loginEmail.trim().toLowerCase()) 
-      && u.senha === loginSenha
-    );
+  const fetchInsumos = async () => {
+    const { data } = await supabase.from('insumos').select('*').order('id', { ascending: false })
+    if (data) setInsumos(data)
+  }
 
-    if (user) {
-      setUsuarioLogado(user);
-      localStorage.setItem('igx_sessao', JSON.stringify(user));
-      setAbaAtiva(user.permissoes[0] || 'dashboard');
+  const fetchOrdens = async () => {
+    const { data } = await supabase.from('ordens').select('*').order('id', { ascending: false })
+    if (data) setOrdens(data)
+  }
+
+  const fetchFinanceiro = async () => {
+    const { data } = await supabase.from('financeiro').select('*').order('id', { ascending: false })
+    if (data) setFinanceiro(data)
+  }
+
+  // ==================== LÓGICA DE LOGIN ====================
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErroLogin('')
+
+    const { data } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('email', emailLogin.trim())
+      .eq('senha', senhaLogin.trim())
+      .single()
+
+    if (data) {
+      setUsuarioAtual(data)
+      setAbaAtiva('dashboard')
     } else {
-      setErroLogin('E-mail/Usuário ou senha incorretos!');
+      setErroLogin('E-mail ou senha incorretos.')
     }
-  };
+  }
 
   const handleLogout = () => {
-    setUsuarioLogado(null);
-    localStorage.removeItem('igx_sessao');
-  };
+    setUsuarioAtual(null)
+    setEmailLogin('')
+    setSenhaLogin('')
+  }
 
-  const temPermissao = (p: Permissao) => {
-    if (!usuarioLogado) return false;
-    return usuarioLogado.permissoes.includes(p);
-  };
-
-  const handleTogglePermissao = (p: Permissao) => {
-    if (permSel.includes(p)) {
-      setPermSel(permSel.filter(item => item !== p));
-    } else {
-      setPermSel([...permSel, p]);
-    }
-  };
-
-  // Funções do Cliente
-  const handleCadastrarCliente = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cliNome.trim() || !cliTel.trim()) {
-      return alert('Por favor, preencha o Nome/Empresa e o Telefone!');
+  // ==================== AÇÕES CRUD (SUPABASE) ====================
+  
+  // CLIENTES
+  const handleAdicionarCliente = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoCliente.nome || !novoCliente.telefone) {
+      alert('Nome/Empresa e Telefone são obrigatórios!')
+      return
     }
 
-    const novoCliente: Cliente = {
+    const item = {
       id: Date.now(),
-      nome: cliNome,
-      telefone: cliTel,
-      cnpj: cliCnpj,
-      rg: cliRg,
-      contato: cliContato,
-      email: cliEmail,
-      endereco: cliEndereco
-    };
-
-    setClientes([...clientes, novoCliente]);
-    setCliNome('');
-    setCliTel('');
-    setCliCnpj('');
-    setCliRg('');
-    setCliContato('');
-    setCliEmail('');
-    setCliEndereco('');
-    alert('Cliente cadastrado com sucesso na IGX Gráfica!');
-  };
-
-  const removerCliente = (id: number) => {
-    if (confirm('Deseja realmente excluir este cliente?')) {
-      setClientes(clientes.filter(c => c.id !== id));
+      nome: novoCliente.nome,
+      telefone: novoCliente.telefone,
+      cnpj: novoCliente.cnpj || '',
+      rg: novoCliente.rg || '',
+      contato: novoCliente.contato || '',
+      email: novoCliente.email || '',
+      endereco: novoCliente.endereco || ''
     }
-  };
 
-  // Funções do Estoque
-  const handleCadastrarInsumo = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nomeInsumo) return alert('Informe o nome do produto no estoque!');
+    await supabase.from('clientes').insert([item])
+    setNovoCliente({})
+  }
 
-    const novo: Insumo = {
+  const handleExcluirCliente = async (id: number) => {
+    if (confirm('Deseja excluir este cliente?')) {
+      await supabase.from('clientes').delete().eq('id', id)
+    }
+  }
+
+  // INSUMOS / ESTOQUE
+  const handleAdicionarInsumo = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoInsumo.nome) {
+      alert('Nome do produto é obrigatório!')
+      return
+    }
+
+    const custo = Number(novoInsumo.preco_custo || 0)
+    const venda = Number(novoInsumo.preco_venda || 0)
+    const margem = custo > 0 ? ((venda - custo) / custo) * 100 : 0
+
+    const item = {
       id: Date.now(),
-      nome: nomeInsumo,
-      quantidade: Number(qtdInsumo),
-      unidade: unidadeInsumo,
-      precoCusto: Number(precoCustoInsumo),
-      precoVenda: Number(precoVendaInsumo),
-      margemLucro: Number(margemLucroInsumo),
-      minimo: Number(minInsumo)
-    };
+      nome: novoInsumo.nome,
+      quantidade: Number(novoInsumo.quantidade || 0),
+      unidade: novoInsumo.unidade || 'unidade',
+      preco_custo: custo,
+      preco_venda: venda,
+      margem_lucro: Number(margem.toFixed(2)),
+      minimo: Number(novoInsumo.minimo || 5)
+    }
 
-    setInsumos([...insumos, novo]);
-    setNomeInsumo('');
-    setQtdInsumo(10);
-    setPrecoCustoInsumo(10);
-    setPrecoVendaInsumo(20);
-    setMargemLucroInsumo(100);
-    setMinInsumo(5);
-    alert('Produto/Insumo cadastrado no estoque!');
-  };
+    await supabase.from('insumos').insert([item])
+    setNovoInsumo({ unidade: 'unidade', quantidade: 0, preco_custo: 0, preco_venda: 0, margem_lucro: 0, minimo: 5 })
+  }
 
-  const ajustarEstoqueRapido = (id: number) => {
-    const qtdStr = prompt('Digite a quantidade a ADICIONAR (use sinal negativo ex: -5 para baixar):');
-    if (!qtdStr) return;
-    const val = Number(qtdStr);
-    if (isNaN(val)) return alert('Valor inválido!');
+  const handleAjustarEstoque = async (id: number, delta: number) => {
+    const item = insumos.find((i) => i.id === id)
+    if (!item) return
 
-    setInsumos(insumos.map(item => {
-      if (item.id === id) {
-        return { ...item, quantidade: Math.max(0, item.quantidade + val) };
-      }
-      return item;
-    }));
-  };
+    const novaQtd = Math.max(0, item.quantidade + delta)
+    await supabase.from('insumos').update({ quantidade: novaQtd }).eq('id', id)
+  }
 
-  const removerInsumo = (id: number) => {
+  const handleExcluirInsumo = async (id: number) => {
     if (confirm('Deseja excluir este item do estoque?')) {
-      setInsumos(insumos.filter(i => i.id !== id));
+      await supabase.from('insumos').delete().eq('id', id)
     }
-  };
+  }
 
-  // Funções de Usuário
-  const handleSalvarUsuario = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nomeUser || permSel.length === 0) return alert('Informe o nome e selecione ao menos uma permissão!');
-
-    if (editandoId) {
-      setUsuarios(usuarios.map(u => {
-        if (u.id === editandoId) {
-          return {
-            ...u,
-            nome: nomeUser,
-            email: emailUser,
-            cargo: cargoUser,
-            permissoes: permSel,
-            senha: senhaUser ? senhaUser : u.senha
-          };
-        }
-        return u;
-      }));
-      alert('Perfil de usuário atualizado!');
-      cancelarEdicao();
-    } else {
-      if (!senhaUser) return alert('Por favor, defina uma senha inicial para o usuário!');
-      const novo: Usuario = {
-        id: Date.now(),
-        nome: nomeUser,
-        email: emailUser || `${nomeUser.toLowerCase().replace(/\s+/g, '')}@igxgrafica.com`,
-        senha: senhaUser,
-        cargo: cargoUser,
-        permissoes: permSel
-      };
-      setUsuarios([...usuarios, novo]);
-      cancelarEdicao();
-      alert('Novo usuário cadastrado!');
+  // ORDENS DE SERVIÇO / PEDIDOS
+  const handleAdicionarOrdem = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novaOrdem.cliente || !novaOrdem.produto || !novaOrdem.valor) {
+      alert('Preencha os campos obrigatórios do pedido!')
+      return
     }
-  };
 
-  const iniciarEdicao = (u: Usuario) => {
-    setEditandoId(u.id);
-    setNomeUser(u.nome);
-    setEmailUser(u.email);
-    setSenhaUser('');
-    setCargoUser(u.cargo);
-    setPermSel(u.permissoes);
-  };
-
-  const redefinirSenhaRapida = (u: Usuario) => {
-    const nova = prompt(`Digite a nova senha para ${u.nome}:`);
-    if (nova && nova.trim().length > 0) {
-      setUsuarios(usuarios.map(item => item.id === u.id ? { ...item, senha: nova.trim() } : item));
-      alert(`Senha de ${u.nome} redefinida!`);
-    }
-  };
-
-  const cancelarEdicao = () => {
-    setEditandoId(null);
-    setNomeUser('');
-    setEmailUser('');
-    setSenhaUser('');
-    setCargoUser('Atendente');
-    setPermSel(['pedidos', 'clientes']);
-  };
-
-  const handleGerarOS = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clienteSel) return alert('Selecione ou informe um cliente!');
-
-    const areaTotal = largura * altura;
-    const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
-      ? areaTotal * quantidade * precoUnidade
-      : quantidade * precoUnidade;
-
-    const novaOS: OrdemServico = {
+    const item = {
       id: Date.now(),
-      cliente: clienteSel,
-      produto: tipoProduto.toUpperCase(),
-      detalhes: tipoProduto === 'lona' || tipoProduto === 'adesivo' ? `${largura}m x ${altura}m (${quantidade}un)` : `${quantidade}un`,
-      valor: valorTotalOrçamento,
-      status: 'Aberto',
+      cliente: novaOrdem.cliente,
+      produto: novaOrdem.produto,
+      detalhes: novaOrdem.detalhes || '',
+      valor: Number(novaOrdem.valor),
+      status: novaOrdem.status || 'Aberto',
       data: new Date().toLocaleDateString('pt-BR')
-    };
+    }
 
-    setOrdens([novaOS, ...ordens]);
-    setFinanceiro([{ id: Date.now(), descricao: `Pedido #${novaOS.id.toString().slice(-4)} - ${clienteSel}`, tipo: 'Entrada', valor: valorTotalOrçamento, data: new Date().toLocaleDateString('pt-BR') }, ...financeiro]);
-    setClienteSel('');
-    alert('Pedido gerado!');
-  };
+    await supabase.from('ordens').insert([item])
+    setNovaOrdem({ status: 'Aberto' })
+  }
 
-  const MudarStatusOS = (id: number, novoStatus: 'Aberto' | 'Em Andamento' | 'Finalizado') => {
-    setOrdens(ordens.map(o => o.id === id ? { ...o, status: novoStatus } : o));
-  };
+  const handleMudarStatusOrdem = async (id: number, novoStatus: 'Aberto' | 'Em Andamento' | 'Concluído') => {
+    const ordem = ordens.find((o) => o.id === id)
+    if (!ordem) return
 
-  // Cálculos
-  const areaTotal = largura * altura;
-  const valorTotalOrçamento = tipoProduto === 'lona' || tipoProduto === 'adesivo'
-    ? areaTotal * quantidade * precoUnidade
-    : quantidade * precoUnidade;
+    await supabase.from('ordens').update({ status: novoStatus }).eq('id', id)
 
-  const totalEntradas = financeiro.filter(x => x.tipo === 'Entrada').reduce((acc, curr) => acc + curr.valor, 0);
-  const saldoFinanceiro = totalEntradas - financeiro.filter(x => x.tipo === 'Saida').reduce((acc, curr) => acc + curr.valor, 0);
+    if (novoStatus === 'Concluído' && ordem.status !== 'Concluído') {
+      await supabase.from('financeiro').insert([
+        {
+          id: Date.now(),
+          descricao: `Pedido #${ordem.id} - ${ordem.cliente}`,
+          tipo: 'Entrada',
+          valor: ordem.valor,
+          data: new Date().toLocaleDateString('pt-BR')
+        }
+      ])
+    }
+  }
 
-  // Valor Total Investido em Estoque
-  const valorTotalEstoque = insumos.reduce((acc, curr) => acc + (curr.quantidade * curr.precoCusto), 0);
-  const insumosCriticos = insumos.filter(i => i.quantidade <= i.minimo);
+  // FINANCEIRO
+  const handleAdicionarFinanceiro = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoFinanceiro.descricao || !novoFinanceiro.valor) {
+      alert('Preencha a descrição e o valor do lançamento!')
+      return
+    }
 
-  // Filtragem dos Insumos/Produtos do Estoque
-  const insumosFiltrados = insumos.filter(item => 
-    item.nome.toLowerCase().includes(buscaEstoque.toLowerCase().trim()) ||
-    item.unidade.toLowerCase().includes(buscaEstoque.toLowerCase().trim())
-  );
+    const item = {
+      id: Date.now(),
+      descricao: novoFinanceiro.descricao,
+      tipo: novoFinanceiro.tipo || 'Entrada',
+      valor: Number(novoFinanceiro.valor),
+      data: new Date().toLocaleDateString('pt-BR')
+    }
 
-  // TELA DE LOGIN
-  if (!usuarioLogado) {
+    await supabase.from('financeiro').insert([item])
+    setNovoFinanceiro({ tipo: 'Entrada' })
+  }
+
+  // USUÁRIOS
+  const handleAdicionarUsuario = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoUsuario.nome || !novoUsuario.email || !novoUsuario.senha) {
+      alert('Preencha nome, e-mail e senha do usuário!')
+      return
+    }
+
+    const item = {
+      id: Date.now(),
+      nome: novoUsuario.nome,
+      email: novoUsuario.email,
+      senha: novoUsuario.senha,
+      cargo: novoUsuario.cargo || 'Operador',
+      permissoes: novoUsuario.permissoes || ['dashboard']
+    }
+
+    await supabase.from('usuarios').insert([item])
+    setNovoUsuario({ permissoes: ['dashboard'] })
+  }
+
+  const togglePermissao = (perm: string) => {
+    const perms = novoUsuario.permissoes || []
+    if (perms.includes(perm)) {
+      setNovoUsuario({ ...novoUsuario, permissoes: perms.filter((p) => p !== perm) })
+    } else {
+      setNovoUsuario({ ...novoUsuario, permissoes: [...perms, perm] })
+    }
+  }
+
+  // CÁLCULOS TOTAIS
+  const totalEntradas = financeiro
+    .filter((f) => f.tipo === 'Entrada')
+    .reduce((acc, f) => acc + Number(f.valor), 0)
+
+  const totalSaidas = financeiro
+    .filter((f) => f.tipo === 'Saída')
+    .reduce((acc, f) => acc + Number(f.valor), 0)
+
+  const saldoTotal = totalEntradas - totalSaidas
+  const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
+
+  // ==================== TELA DE LOGIN (AMARELO OURO - PT-BR) ====================
+  if (!usuarioAtual) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center p-4 font-sans selection:bg-black selection:text-amber-400">
-        <div className="w-full max-w-md bg-amber-100/95 border border-black/30 p-8 rounded-3xl shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="inline-block bg-black text-amber-400 px-4 py-1.5 rounded-xl font-black text-2xl shadow-xl tracking-widest border border-amber-300/30">
-              IGX
-            </div>
-            <h1 className="text-2xl font-black text-black tracking-wide">GRÁFICA</h1>
-            <p className="text-xs font-bold text-black/70">Acesse com suas credenciais</p>
-          </div>
+      <div className="min-h-screen bg-amber-400 text-neutral-900 flex items-center justify-center p-4">
+        <div className="bg-neutral-950 text-white border border-amber-500/30 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          
+          {/* LADO ESQUERDO: FORMULÁRIO COM LOGO */}
+          <div>
+            <div className="text-center md:text-left mb-6">
+              {/* LOGO DA EMPRESA */}
+              <div className="mb-4 flex items-center justify-center md:justify-start">
+                <img
+                  src="/logo.png"
+                  alt="IGX Gráfica Logo"
+                  className="h-16 object-contain max-w-full"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              </div>
 
-          <form onSubmit={handleLogin} className="space-y-4 text-sm">
+              <h1 className="text-3xl font-black tracking-tight text-amber-400">IGX GRÁFICA</h1>
+              <p className="text-sm text-neutral-400 mt-1">Sistema de Gestão ERP & Impressão</p>
+            </div>
+
             {erroLogin && (
-              <div className="bg-red-600 text-white p-3 rounded-xl font-bold text-xs text-center shadow">
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl text-center">
                 {erroLogin}
               </div>
             )}
 
-            <div>
-              <label className="block mb-1 text-black font-extrabold">E-mail ou Nome de Usuário</label>
-              <input 
-                type="text" 
-                required
-                placeholder="ex: admin@igxgrafica.com"
-                value={loginEmail} 
-                onChange={e => setLoginEmail(e.target.value)} 
-                className="w-full bg-amber-50 border border-black/30 rounded-xl p-3 text-black font-bold outline-none focus:border-black focus:ring-2 focus:ring-black/20" 
-              />
-            </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1">E-MAIL</label>
+                <input
+                  type="email"
+                  required
+                  value={emailLogin}
+                  onChange={(e) => setEmailLogin(e.target.value)}
+                  placeholder="usuario@igxgrafica.com"
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition text-white"
+                />
+              </div>
 
-            <div>
-              <label className="block mb-1 text-black font-extrabold">Senha</label>
-              <input 
-                type="password" 
-                required
-                placeholder="••••••••"
-                value={loginSenha} 
-                onChange={e => setLoginSenha(e.target.value)} 
-                className="w-full bg-amber-50 border border-black/30 rounded-xl p-3 text-black font-bold outline-none focus:border-black focus:ring-2 focus:ring-black/20" 
-              />
-            </div>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1">SENHA</label>
+                <input
+                  type="password"
+                  required
+                  value={senhaLogin}
+                  onChange={(e) => setSenhaLogin(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition text-white"
+                />
+              </div>
 
-            <button type="submit" className="w-full bg-black hover:bg-neutral-900 text-amber-400 font-black py-3.5 rounded-xl transition shadow-xl text-base tracking-wide border border-amber-400/30">
-              Entrar no Sistema
-            </button>
-          </form>
-
-          <div className="text-center border-t border-black/10 pt-4">
-            <p className="text-[11px] text-black/60 font-semibold">
-              Credencial inicial: <br />
-              <span className="font-extrabold text-black">admin@igxgrafica.com</span> / Senha: <span className="font-extrabold text-black">admin123</span>
-            </p>
+              <button
+                type="submit"
+                className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black py-3 rounded-xl transition shadow-lg shadow-amber-400/20"
+              >
+                Acessar o Sistema
+              </button>
+            </form>
           </div>
+
+          {/* LADO DIREITO: IMAGENS DA GRÁFICA */}
+          <div className="hidden md:flex flex-col gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
+            <div className="relative h-40 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
+              <img
+                src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_0"
+                alt="Maquinaria Offset e Impressão"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                  <Printer className="w-4 h-4" /> Produção & Offset
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative h-28 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
+                <img
+                  src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_1"
+                  alt="Tintas CMYK"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-2 text-center">
+                  <span className="text-xs font-bold text-white flex items-center gap-1">
+                    <Palette className="w-3 h-3 text-amber-400" /> Qualidade CMYK
+                  </span>
+                </div>
+              </div>
+
+              <div className="relative h-28 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
+                <img
+                  src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_2"
+                  alt="Acabamento e Papel"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-2 text-center">
+                  <span className="text-xs font-bold text-white flex items-center gap-1">
+                    <Layers className="w-3 h-3 text-amber-400" /> Acabamento
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </main>
-    );
+      </div>
+    )
   }
 
-  // PAINEL DO SISTEMA
+  // ==================== PAINEL PRINCIPAL DO ERP ====================
   return (
-    <main className="min-h-screen bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-black p-4 md:p-8 font-sans selection:bg-black selection:text-amber-400">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Topo / Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-black/30 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="bg-black text-amber-400 px-3.5 py-1 rounded-lg font-black text-xl shadow-xl tracking-widest border border-amber-300/30">
-              IGX
-            </div>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col md:flex-row">
+      {/* SIDEBAR NAVEGAÇÃO */}
+      <aside className="w-full md:w-64 bg-neutral-900 border-r border-neutral-800 p-6 flex flex-col justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-8">
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="h-10 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
             <div>
-              <h1 className="text-2xl font-black tracking-wider text-black">GRÁFICA</h1>
-              <p className="text-xs text-black/80 font-bold">Gestão & Produção Premium</p>
+              <h2 className="font-black text-lg leading-tight text-amber-400">IGX Gráfica</h2>
+              <span className="text-xs text-neutral-400">Sistema ERP Cloud</span>
             </div>
           </div>
 
-          {/* Usuário Logado & Botão Sair */}
-          <div className="flex items-center gap-3 bg-black text-amber-400 p-2 px-3 rounded-xl shadow-lg border border-black/20 text-xs">
-            <div>
-              <p className="font-black text-amber-300">{usuarioLogado.nome}</p>
-              <p className="text-[10px] text-amber-200/70 font-bold">{usuarioLogado.cargo}</p>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="bg-amber-400 hover:bg-amber-300 text-black font-extrabold px-2.5 py-1 rounded-lg transition ml-2"
-              title="Sair do sistema"
-            >
-              Sair ✕
-            </button>
-          </div>
-
-          {/* Navegação principal */}
-          <div className="flex flex-wrap bg-amber-600/30 backdrop-blur-md p-1.5 rounded-xl border border-black/20 gap-1 text-sm shadow-lg">
+          <nav className="space-y-2">
             {[
-              { id: 'dashboard', label: 'Dashboard' },
-              { id: 'pedidos', label: 'Pedidos / O.S.' },
-              { id: 'clientes', label: 'Clientes' },
-              { id: 'estoque', label: 'Estoque' },
-              { id: 'financeiro', label: 'Financeiro' },
-              { id: 'usuarios', label: 'Gestão Usuários' },
-            ].filter(item => temPermissao(item.id as Permissao)).map(item => (
-              <button 
-                key={item.id}
-                onClick={() => setAbaAtiva(item.id as Permissao)}
-                className={`px-4 py-2 rounded-lg font-extrabold transition-all duration-300 ${
-                  abaAtiva === item.id 
-                    ? 'bg-black text-amber-400 shadow-xl scale-105' 
-                    : 'text-black/80 hover:text-black hover:bg-amber-300/60'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+              { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
+              { id: 'pedidos', label: 'Pedidos / OS', icon: FileText },
+              { id: 'clientes', label: 'Clientes', icon: Users },
+              { id: 'estoque', label: 'Estoque / Insumos', icon: Package },
+              { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+              { id: 'usuarios', label: 'Usuários', icon: UserCheck }
+            ]
+              .filter((item) => usuarioAtual.permissoes.includes(item.id))
+              .map((item) => {
+                const Icon = item.icon
+                const ativo = abaAtiva === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setAbaAtiva(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition ${
+                      ativo
+                        ? 'bg-amber-400 text-black font-black shadow-lg shadow-amber-400/10'
+                        : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {item.label}
+                  </button>
+                )
+              })}
+          </nav>
         </div>
 
-        {/* 1. DASHBOARD */}
-        {abaAtiva === 'dashboard' && temPermissao('dashboard') && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Total Faturado</p>
-                <p className="text-2xl font-black text-emerald-800 mt-2">R$ {totalEntradas.toFixed(2)}</p>
+        {/* PERFIL LOGADO */}
+        <div className="pt-6 border-t border-neutral-800 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-white">{usuarioAtual.nome}</p>
+              <p className="text-xs text-amber-400">{usuarioAtual.cargo}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sair do Sistema"
+              className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 rounded-lg transition"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* CONTEÚDO PRINCIPAL */}
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto">
+        {loading && (
+          <div className="text-xs text-amber-400 mb-4 animate-pulse">Sincronizando dados em tempo real...</div>
+        )}
+
+        {/* DASHBOARD */}
+        {abaAtiva === 'dashboard' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Painel de Controle</h1>
+              <p className="text-sm text-neutral-400">Visão geral em tempo real da sua gráfica</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">SALDO EM CAIXA</span>
+                <p className={`text-2xl font-black mt-2 ${saldoTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  R$ {saldoTotal.toFixed(2)}
+                </p>
               </div>
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Valor Investido em Estoque</p>
-                <p className="text-2xl font-black text-amber-900 mt-2">R$ {valorTotalEstoque.toFixed(2)}</p>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">RECEITAS</span>
+                <p className="text-2xl font-black mt-2 text-emerald-400">R$ {totalEntradas.toFixed(2)}</p>
               </div>
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Estoque Crítico (Repor)</p>
-                <p className="text-2xl font-black text-red-700 mt-2">{insumosCriticos.length} itens</p>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">PEDIDOS ATIVOS</span>
+                <p className="text-2xl font-black mt-2 text-amber-400">
+                  {ordens.filter((o) => o.status !== 'Concluído').length}
+                </p>
               </div>
-              <div className="bg-amber-100/90 border border-black/20 p-5 rounded-2xl shadow-lg">
-                <p className="text-xs text-black/70 font-black uppercase tracking-wider">Clientes Cadastrados</p>
-                <p className="text-2xl font-black text-amber-950 mt-2">{clientes.length}</p>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">ALERTAS DE ESTOQUE</span>
+                <p className="text-2xl font-black mt-2 text-amber-500">{alertasEstoque.length}</p>
               </div>
             </div>
 
-            <div className="bg-amber-100/90 border border-black/20 rounded-2xl p-6 shadow-lg">
-              <h3 className="text-lg font-black text-black mb-2">Painel de Controle - IGX Gráfica</h3>
-              <p className="text-black/80 text-sm font-medium leading-relaxed">
-                Navegue pelas abas superiores para emitir orçamentos, acompanhar a produção no Kanban, gerenciar a base de clientes, controlar o estoque com busca rápida e cálculo automático de margem de lucro e visualizar o fluxo financeiro.
-              </p>
-            </div>
+            {alertasEstoque.length > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
+                <div className="flex items-center gap-3 text-amber-400 font-bold mb-3">
+                  <AlertTriangle className="w-5 h-5" />
+                  Atenção: Itens com Estoque Abaixo do Mínimo
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {alertasEstoque.map((item) => (
+                    <div key={item.id} className="bg-neutral-900/80 p-3 rounded-xl border border-neutral-800 text-sm">
+                      <span className="font-bold">{item.nome}</span>: {item.quantidade} {item.unidade} (Mín: {item.minimo})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* 2. PEDIDOS / OS */}
-        {abaAtiva === 'pedidos' && temPermissao('pedidos') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-amber-100/90 p-6 rounded-2xl border border-black/20 space-y-4 shadow-xl">
-              <h2 className="text-lg font-black border-b border-black/20 pb-3 text-black">Novo Pedido / Orçamento</h2>
-              <form onSubmit={handleGerarOS} className="space-y-4 text-sm">
-                <div>
-                  <label className="block mb-1 font-extrabold text-black">Selecionar ou Digitar Cliente</label>
-                  {clientes.length > 0 ? (
-                    <select 
-                      value={clienteSel} 
-                      onChange={e => setClienteSel(e.target.value)}
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold outline-none focus:border-black"
-                    >
-                      <option value="">-- Selecione o Cliente --</option>
-                      {clientes.map(c => (
-                        <option key={c.id} value={c.nome}>
-                          {c.nome} {c.cnpj ? `(CNPJ: ${c.cnpj})` : ''}
-                        </option>
+        {/* PEDIDOS / OS */}
+        {abaAtiva === 'pedidos' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Ordens de Serviço e Pedidos</h1>
+              <p className="text-sm text-neutral-400">Gerencie os pedidos da gráfica</p>
+            </div>
+
+            <form onSubmit={handleAdicionarOrdem} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="font-bold text-lg mb-2">Cadastrar Novo Pedido</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="Cliente*"
+                  required
+                  value={novaOrdem.cliente || ''}
+                  onChange={(e) => setNovaOrdem({ ...novaOrdem, cliente: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Produto / Serviço*"
+                  required
+                  value={novaOrdem.produto || ''}
+                  onChange={(e) => setNovaOrdem({ ...novaOrdem, produto: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Valor Total (R$)*"
+                  required
+                  value={novaOrdem.valor || ''}
+                  onChange={(e) => setNovaOrdem({ ...novaOrdem, valor: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Criar Pedido
+                </button>
+              </div>
+              <textarea
+                placeholder="Detalhes do pedido (medidas, papel, acabamento...)"
+                value={novaOrdem.detalhes || ''}
+                onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </form>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(['Aberto', 'Em Andamento', 'Concluído'] as const).map((status) => (
+                <div key={status} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                  <h3 className="font-bold text-sm tracking-wider uppercase mb-4 text-neutral-400 border-b border-neutral-800 pb-2">
+                    {status} ({ordens.filter((o) => o.status === status).length})
+                  </h3>
+                  <div className="space-y-3">
+                    {ordens
+                      .filter((o) => o.status === status)
+                      .map((ordem) => (
+                        <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 space-y-2">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-white">{ordem.cliente}</span>
+                            <span className="text-xs font-black text-amber-400">R$ {Number(ordem.valor).toFixed(2)}</span>
+                          </div>
+                          <p className="text-xs text-neutral-300 font-medium">{ordem.produto}</p>
+                          {ordem.detalhes && <p className="text-xs text-neutral-500">{ordem.detalhes}</p>}
+                          
+                          <div className="flex gap-2 pt-2 border-t border-neutral-900">
+                            {status !== 'Aberto' && (
+                              <button
+                                onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Concluído' ? 'Em Andamento' : 'Aberto')}
+                                className="text-xs text-neutral-400 hover:text-white"
+                              >
+                                ← Voltar
+                              </button>
+                            )}
+                            {status !== 'Concluído' && (
+                              <button
+                                onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Aberto' ? 'Em Andamento' : 'Concluído')}
+                                className="text-xs text-amber-400 hover:underline font-bold ml-auto"
+                              >
+                                Avançar →
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
-                    </select>
-                  ) : (
-                    <input 
-                      type="text" 
-                      placeholder="Nome do cliente" 
-                      value={clienteSel} 
-                      onChange={e => setClienteSel(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 font-extrabold text-black">Produto</label>
-                    <select value={tipoProduto} onChange={e => setTipoProduto(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold">
-                      <option value="lona">Lona / Banner (m²)</option>
-                      <option value="adesivo">Adesivo (m²)</option>
-                      <option value="cartao">Cartão de Visita</option>
-                      <option value="panfleto">Panfletos</option>
-                    </select>
                   </div>
-                  <div>
-                    <label className="block mb-1 font-extrabold text-black">Quantidade</label>
-                    <input type="number" min="1" value={quantidade} onChange={e => setQuantidade(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-                </div>
-
-                {(tipoProduto === 'lona' || tipoProduto === 'adesivo') && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block mb-1 text-xs font-bold text-black/70">Largura (m)</label>
-                      <input type="number" step="0.01" value={largura} onChange={e => setLargura(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                    </div>
-                    <div>
-                      <label className="block mb-1 text-xs font-bold text-black/70">Altura (m)</label>
-                      <input type="number" step="0.01" value={altura} onChange={e => setAltura(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block mb-1 font-extrabold text-black">Preço Unitário / m² (R$)</label>
-                  <input type="number" step="0.01" value={precoUnidade} onChange={e => setPrecoUnidade(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <div className="bg-black text-amber-400 p-4 rounded-xl flex justify-between items-center shadow-md">
-                  <span className="font-bold text-amber-200">Total:</span>
-                  <span className="text-xl font-black text-amber-400">R$ {valorTotalOrçamento.toFixed(2)}</span>
-                </div>
-
-                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3.5 rounded-xl transition shadow-xl border border-amber-400/30">
-                  Gerar Pedido IGX
-                </button>
-              </form>
-            </div>
-
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-lg font-black text-black">Acompanhamento (Kanban)</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-amber-100/90 border border-black/20 p-4 rounded-2xl space-y-3 shadow-lg">
-                  <div className="flex justify-between items-center border-b border-black/20 pb-2">
-                    <span className="font-black text-black text-sm">EM ABERTO</span>
-                    <span className="text-xs bg-black text-amber-400 px-2.5 py-0.5 rounded-full font-black">{ordens.filter(o => o.status === 'Aberto').length}</span>
-                  </div>
-                  {ordens.filter(o => o.status === 'Aberto').map(o => (
-                    <div key={o.id} className="bg-amber-50 p-3.5 rounded-xl border border-black/20 space-y-2">
-                      <p className="font-black text-black">{o.cliente}</p>
-                      <p className="text-xs text-black/70 font-semibold">{o.produto} - {o.detalhes}</p>
-                      <p className="text-sm font-black text-amber-900">R$ {o.valor.toFixed(2)}</p>
-                      <button onClick={() => MudarStatusOS(o.id, 'Em Andamento')} className="w-full bg-black text-amber-400 text-xs font-black py-2 rounded-lg">Iniciar Produção ➔</button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-amber-100/90 border border-black/20 p-4 rounded-2xl space-y-3 shadow-lg">
-                  <div className="flex justify-between items-center border-b border-black/20 pb-2">
-                    <span className="font-black text-black text-sm">EM ANDAMENTO</span>
-                    <span className="text-xs bg-black text-amber-400 px-2.5 py-0.5 rounded-full font-black">{ordens.filter(o => o.status === 'Em Andamento').length}</span>
-                  </div>
-                  {ordens.filter(o => o.status === 'Em Andamento').map(o => (
-                    <div key={o.id} className="bg-amber-50 p-3.5 rounded-xl border border-black/20 space-y-2">
-                      <p className="font-black text-black">{o.cliente}</p>
-                      <p className="text-xs text-black/70 font-semibold">{o.produto} - {o.detalhes}</p>
-                      <p className="text-sm font-black text-amber-900">R$ {o.valor.toFixed(2)}</p>
-                      <button onClick={() => MudarStatusOS(o.id, 'Finalizado')} className="w-full bg-emerald-800 text-amber-300 text-xs font-black py-2 rounded-lg">Concluir ✓</button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-amber-100/90 border border-black/20 p-4 rounded-2xl space-y-3 shadow-lg">
-                  <div className="flex justify-between items-center border-b border-black/20 pb-2">
-                    <span className="font-black text-emerald-900 text-sm">FINALIZADOS</span>
-                    <span className="text-xs bg-emerald-900 text-amber-300 px-2.5 py-0.5 rounded-full font-black">{ordens.filter(o => o.status === 'Finalizado').length}</span>
-                  </div>
-                  {ordens.filter(o => o.status === 'Finalizado').map(o => (
-                    <div key={o.id} className="bg-amber-50 p-3.5 rounded-xl border border-emerald-800/30 space-y-2">
-                      <p className="font-black text-black">{o.cliente}</p>
-                      <p className="text-xs text-black/70 font-semibold">{o.produto} - {o.detalhes}</p>
-                      <p className="text-sm font-black text-emerald-800">R$ {o.valor.toFixed(2)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. CADASTRO DE CLIENTES COMPLETO */}
-        {abaAtiva === 'clientes' && temPermissao('clientes') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Cadastrar Novo Cliente</h2>
-              
-              <form onSubmit={handleCadastrarCliente} className="space-y-3 text-sm">
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Nome Completo / Empresa *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="Ex: Empresa Exemplo Ltda / João Silva" 
-                    value={cliNome} 
-                    onChange={e => setCliNome(e.target.value)} 
-                    className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Telefone / Whats *</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="(00) 00000-0000" 
-                      value={cliTel} 
-                      onChange={e => setCliTel(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Pessoa de Contato</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Carlos (Gerente)" 
-                      value={cliContato} 
-                      onChange={e => setCliContato(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" 
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">CNPJ</label>
-                    <input type="text" placeholder="00.000.000/0001-00" value={cliCnpj} onChange={e => setCliCnpj(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">RG / IE</label>
-                    <input type="text" placeholder="00.000.000-0" value={cliRg} onChange={e => setCliRg(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">E-mail</label>
-                  <input type="email" placeholder="cliente@email.com" value={cliEmail} onChange={e => setCliEmail(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Endereço Completo</label>
-                  <input type="text" placeholder="Rua, Número, Bairro, Cidade - UF" value={cliEndereco} onChange={e => setCliEndereco(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
-                  Cadastrar Cliente
-                </button>
-              </form>
-            </div>
-
-            <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Base de Clientes ({clientes.length})</h2>
-              {clientes.length === 0 ? (
-                <p className="text-black/60 text-sm font-semibold">Nenhum cliente cadastrado ainda.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {clientes.map(c => (
-                    <div key={c.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-2 shadow-sm relative">
-                      <div className="flex justify-between items-start border-b border-black/10 pb-2">
-                        <div>
-                          <p className="font-black text-black text-base">{c.nome}</p>
-                          {c.contato && <p className="text-xs text-black/70 font-bold">Contato: {c.contato}</p>}
-                        </div>
-                        <button onClick={() => removerCliente(c.id)} className="text-red-600 hover:text-red-800 font-bold text-xs" title="Remover cliente">✕</button>
-                      </div>
-
-                      <div className="space-y-1 text-xs text-black/80 font-semibold">
-                        <p><span className="font-black text-black">Tel/Whats:</span> {c.telefone}</p>
-                        {c.cnpj && <p><span className="font-black text-black">CNPJ:</span> {c.cnpj}</p>}
-                        {c.rg && <p><span className="font-black text-black">RG/IE:</span> {c.rg}</p>}
-                        {c.email && <p><span className="font-black text-black">E-mail:</span> {c.email}</p>}
-                        {c.endereco && <p><span className="font-black text-black">Endereço:</span> {c.endereco}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 4. ESTOQUE DE PRODUTOS COMPLETO COM BUSCA */}
-        {abaAtiva === 'estoque' && temPermissao('estoque') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Cadastrar Produto no Estoque</h2>
-              
-              <form onSubmit={handleCadastrarInsumo} className="space-y-4 text-sm">
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Produto / Material *</label>
-                  <input type="text" required placeholder="Ex: Papel Couché 150g A4 / Lona 440g" value={nomeInsumo} onChange={e => setNomeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Quantidade Inicial</label>
-                    <input type="number" min="0" value={qtdInsumo} onChange={e => setQtdInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Unidade</label>
-                    <select value={unidadeInsumo} onChange={e => setUnidadeInsumo(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold">
-                      <option value="unidade">Unidade (un)</option>
-                      <option value="resma">Resma</option>
-                      <option value="caixa">Caixa</option>
-                      <option value="m">Metros (m)</option>
-                      <option value="m²">Metros Quadrados (m²)</option>
-                      <option value="folhas">Folhas</option>
-                      <option value="litros">Litros (L)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Preço de Custo (R$)</label>
-                    <input type="number" step="0.01" value={precoCustoInsumo} onChange={e => handleAtualizarPrecosEstoque(Number(e.target.value), precoVendaInsumo)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Preço de Venda (R$)</label>
-                    <input type="number" step="0.01" value={precoVendaInsumo} onChange={e => handleAtualizarPrecosEstoque(precoCustoInsumo, Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Margem de Lucro (%)</label>
-                    <input type="number" step="0.01" value={margemLucroInsumo} onChange={e => handleAtualizarMargemLucro(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-
-                  <div>
-                    <label className="block mb-1 text-black font-extrabold">Mínimo (Alerta)</label>
-                    <input type="number" min="1" value={minInsumo} onChange={e => setMinInsumo(Number(e.target.value))} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                  </div>
-                </div>
-
-                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
-                  Salvar Produto no Estoque
-                </button>
-              </form>
-            </div>
-
-            <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-black/20 pb-3">
-                <div>
-                  <h2 className="text-lg font-black text-black">Produtos no Estoque ({insumos.length})</h2>
-                  <p className="text-xs text-black/70 font-bold">Valor Total em Custo: <span className="text-black font-black">R$ {valorTotalEstoque.toFixed(2)}</span></p>
-                </div>
-
-                {insumosCriticos.length > 0 && (
-                  <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-xl animate-pulse shadow">
-                    ⚠️ {insumosCriticos.length} produto(s) precisam de REPOSIÇÃO!
-                  </div>
-                )}
-              </div>
-
-              {/* BARRA DE CONSULTA / BUSCA NO ESTOQUE */}
-              <div className="relative">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input 
-                      type="text" 
-                      placeholder="🔍 Consultar / Pesquisar produto no estoque..."
-                      value={buscaEstoque} 
-                      onChange={e => setBuscaEstoque(e.target.value)} 
-                      className="w-full bg-amber-50 border border-black/30 rounded-xl py-2.5 pl-3 pr-8 text-black font-extrabold placeholder-black/50 text-sm focus:outline-none focus:border-black shadow-inner" 
-                    />
-                    {buscaEstoque && (
-                      <button 
-                        onClick={() => setBuscaEstoque('')}
-                        className="absolute right-2.5 top-2.5 text-black/60 hover:text-black font-black text-xs bg-amber-200/80 rounded-full w-5 h-5 flex items-center justify-center"
-                        title="Limpar busca"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {buscaEstoque && (
-                  <p className="text-[11px] font-bold text-black/70 mt-1">
-                    Exibindo {insumosFiltrados.length} de {insumos.length} produtos
-                  </p>
-                )}
-              </div>
-
-              {insumosFiltrados.length === 0 ? (
-                <div className="bg-amber-50/80 p-6 rounded-2xl text-center border border-black/10">
-                  <p className="font-extrabold text-black text-sm">Nenhum produto encontrado para "{buscaEstoque}".</p>
-                  <p className="text-xs text-black/60 font-semibold mt-1">Verifique o termo digitado ou limpe a busca.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {insumosFiltrados.map(item => {
-                    const precisaRepor = item.quantidade <= item.minimo;
-                    const valorTotalCusto = item.quantidade * item.precoCusto;
-
-                    return (
-                      <div key={item.id} className={`p-4 rounded-2xl border space-y-3 transition-all ${precisaRepor ? 'bg-red-100 border-red-600 shadow-md ring-2 ring-red-600/30' : 'bg-amber-50 border-black/20 shadow-sm'}`}>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-black text-black text-base">{item.nome}</p>
-                            <p className="text-[11px] font-bold text-black/70">
-                              Custo: R$ {item.precoCusto.toFixed(2)} | Venda: R$ {item.precoVenda.toFixed(2)}
-                            </p>
-                          </div>
-                          {precisaRepor ? (
-                            <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Repor Estoque</span>
-                          ) : (
-                            <span className="text-[10px] bg-emerald-800 text-amber-300 px-2 py-0.5 rounded-full font-bold">OK</span>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 bg-black/5 p-2.5 rounded-xl border border-black/10 text-xs">
-                          <div>
-                            <span className="text-black/60 font-bold block text-[10px]">QUANTIDADE ATUAL:</span>
-                            <span className={`text-xl font-black ${precisaRepor ? 'text-red-700' : 'text-black'}`}>{item.quantidade} <span className="text-xs font-bold text-black/60">{item.unidade}</span></span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-black/60 font-bold block text-[10px]">MARGEM DE LUCRO:</span>
-                            <span className="text-sm font-black text-emerald-800 block">+{item.margemLucro.toFixed(1)}%</span>
-                            <span className="text-[10px] text-black/60 font-bold">Investido: R$ {valorTotalCusto.toFixed(2)}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center text-[11px] font-bold text-black/70 border-t border-black/10 pt-2">
-                          <span>Min. Reposição: {item.minimo} {item.unidade}</span>
-                          <div className="flex gap-2">
-                            <button onClick={() => ajustarEstoqueRapido(item.id)} className="bg-black text-amber-400 font-black px-2.5 py-1 rounded-lg hover:bg-neutral-900 transition" title="Entrada ou saída de estoque">+ / -</button>
-                            <button onClick={() => removerInsumo(item.id)} className="bg-red-600 text-white font-bold px-2 py-1 rounded-lg hover:bg-red-700 transition" title="Remover item">✕</button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 5. FINANCEIRO */}
-        {abaAtiva === 'financeiro' && temPermissao('financeiro') && (
-          <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-6 shadow-xl">
-            <div className="flex justify-between items-center border-b border-black/20 pb-4">
-              <h2 className="text-lg font-black text-black">Fluxo Financeiro</h2>
-              <p className="text-2xl font-black text-emerald-900">R$ {saldoFinanceiro.toFixed(2)}</p>
-            </div>
-            <div className="space-y-2">
-              {financeiro.map(f => (
-                <div key={f.id} className="flex justify-between items-center bg-amber-50 p-3.5 rounded-xl border border-black/20 text-sm">
-                  <p className="font-black text-black">{f.descricao}</p>
-                  <span className="font-black text-emerald-800">+ R$ {f.valor.toFixed(2)}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* 6. GESTÃO DE USUÁRIOS E SENHAS */}
-        {abaAtiva === 'usuarios' && temPermissao('usuarios') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <div className="flex justify-between items-center border-b border-black/20 pb-3">
-                <h2 className="text-lg font-black text-black">
-                  {editandoId ? 'Editar Perfil de Usuário' : 'Cadastrar Novo Usuário'}
-                </h2>
-                {editandoId && (
-                  <button onClick={cancelarEdicao} className="text-xs bg-black text-amber-400 px-2 py-1 rounded font-bold">
-                    Cancelar ✕
-                  </button>
-                )}
-              </div>
-
-              <form onSubmit={handleSalvarUsuario} className="space-y-4 text-sm">
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Nome Completo</label>
-                  <input type="text" required value={nomeUser} onChange={e => setNomeUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">E-mail / Login</label>
-                  <input type="email" value={emailUser} onChange={e => setEmailUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">
-                    {editandoId ? 'Nova Senha (deixe em branco p/ não alterar)' : 'Senha de Acesso'}
-                  </label>
-                  <input type="password" placeholder="••••••••" value={senhaUser} onChange={e => setSenhaUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" />
-                </div>
-
-                <div>
-                  <label className="block mb-1 text-black font-extrabold">Cargo / Função</label>
-                  <input type="text" value={cargoUser} onChange={e => setCargoUser(e.target.value)} className="w-full bg-amber-50 border border-black/30 rounded-xl p-2.5 text-black font-semibold" placeholder="Ex: Impressor / Vendedor" />
-                </div>
-
-                <div>
-                  <label className="block mb-2 text-black font-black">Permissões de Acesso:</label>
-                  <div className="space-y-2 bg-amber-50 p-3 rounded-xl border border-black/20">
-                    {[
-                      { id: 'dashboard', label: 'Dashboard Geral' },
-                      { id: 'pedidos', label: 'Pedidos e Lançamentos' },
-                      { id: 'clientes', label: 'Cadastro de Clientes' },
-                      { id: 'estoque', label: 'Controle de Estoque' },
-                      { id: 'financeiro', label: 'Fluxo Financeiro' },
-                      { id: 'usuarios', label: 'Gerenciar Usuários' },
-                    ].map(p => (
-                      <label key={p.id} className="flex items-center gap-2 text-xs font-bold text-black cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={permSel.includes(p.id as Permissao)}
-                          onChange={() => handleTogglePermissao(p.id as Permissao)}
-                          className="w-4 h-4 accent-black rounded"
-                        />
-                        {p.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <button type="submit" className="w-full bg-black text-amber-400 font-black py-3 rounded-xl shadow-lg border border-amber-400/30">
-                  {editandoId ? 'Atualizar Perfil' : 'Salvar Usuário & Permissões'}
-                </button>
-              </form>
+        {/* CLIENTES */}
+        {abaAtiva === 'clientes' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Gestão de Clientes</h1>
+              <p className="text-sm text-neutral-400">Cadastre e consulte os seus clientes</p>
             </div>
 
-            <div className="lg:col-span-2 bg-amber-100/90 border border-black/20 p-6 rounded-2xl space-y-4 shadow-xl">
-              <h2 className="text-lg font-black text-black">Usuários do Sistema ({usuarios.length})</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {usuarios.map(u => (
-                  <div key={u.id} className="bg-amber-50 p-4 rounded-xl border border-black/20 space-y-3 shadow-sm flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <p className="font-black text-black">{u.nome}</p>
-                        <span className="text-[10px] bg-black text-amber-400 px-2 py-0.5 rounded-full font-bold">{u.cargo}</span>
-                      </div>
-                      <p className="text-xs text-black/70 font-semibold">{u.email}</p>
-                      
-                      <div className="border-t border-black/10 pt-2">
-                        <p className="text-[10px] font-black text-black mb-1">Acessos:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {u.permissoes.map(p => (
-                            <span key={p} className="text-[9px] bg-amber-200/80 text-black px-1.5 py-0.5 rounded font-bold border border-black/10">
-                              {p}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+            <form onSubmit={handleAdicionarCliente} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="font-bold text-lg mb-2">Cadastrar Novo Cliente</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  placeholder="Nome / Empresa*"
+                  required
+                  value={novoCliente.nome || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Telefone / WhatsApp*"
+                  required
+                  value={novoCliente.telefone || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Pessoa de Contato"
+                  value={novoCliente.contato || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, contato: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="CNPJ"
+                  value={novoCliente.cnpj || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="E-mail"
+                  value={novoCliente.email || ''}
+                  onChange={(e) => setNovoCliente({ ...novoCliente, email: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Salvar Cliente
+                </button>
+              </div>
+            </form>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10">
-                      <button onClick={() => iniciarEdicao(u)} className="bg-black text-amber-400 hover:bg-neutral-900 text-xs font-bold py-1.5 rounded-lg transition">Editar Perfil</button>
-                      <button onClick={() => redefinirSenhaRapida(u)} className="bg-amber-600/30 hover:bg-amber-600 text-black text-xs font-bold py-1.5 rounded-lg border border-black/20 transition">Redefinir Senha</button>
-                    </div>
-                  </div>
-                ))}
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+              <div className="relative">
+                <Search className="w-5 h-5 absolute left-3 top-3 text-neutral-500" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar cliente por nome ou telefone..."
+                  value={buscaCliente}
+                  onChange={(e) => setBuscaCliente(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-neutral-300">
+                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                    <tr>
+                      <th className="p-3">Nome / Empresa</th>
+                      <th className="p-3">Telefone</th>
+                      <th className="p-3">CNPJ / Documento</th>
+                      <th className="p-3">Contato</th>
+                      <th className="p-3 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientes
+                      .filter((c) => c.nome.toLowerCase().includes(buscaCliente.toLowerCase()) || c.telefone.includes(buscaCliente))
+                      .map((cliente) => (
+                        <tr key={cliente.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
+                          <td className="p-3 font-bold text-white">{cliente.nome}</td>
+                          <td className="p-3">{cliente.telefone}</td>
+                          <td className="p-3">{cliente.cnpj || '-'}</td>
+                          <td className="p-3">{cliente.contato || '-'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => handleExcluirCliente(cliente.id)}
+                              className="text-red-400 hover:text-red-300 p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-      </div>
-    </main>
-  );
+        {/* ESTOQUE */}
+        {abaAtiva === 'estoque' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Controle de Estoque e Insumos</h1>
+              <p className="text-sm text-neutral-400">Gestão de materiais e papéis</p>
+            </div>
+
+            <form onSubmit={handleAdicionarInsumo} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="font-bold text-lg mb-2">Adicionar Novo Produto / Insumo</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="Nome do Produto*"
+                  required
+                  value={novoInsumo.nome || ''}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <select
+                  value={novoInsumo.unidade || 'unidade'}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, unidade: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                >
+                  <option value="unidade">Unidade</option>
+                  <option value="resma">Resma</option>
+                  <option value="caixa">Caixa</option>
+                  <option value="metros">Metros</option>
+                  <option value="m²">m²</option>
+                  <option value="folhas">Folhas</option>
+                  <option value="litros">Litros</option>
+                </select>
+                <input
+                  type="number"
+                  placeholder="Qtd Inicial"
+                  value={novoInsumo.quantidade || ''}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, quantidade: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="number"
+                  placeholder="Estoque Mínimo Alerta"
+                  value={novoInsumo.minimo || ''}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, minimo: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Preço Custo (R$)"
+                  value={novoInsumo.preco_custo || ''}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_custo: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Preço Venda (R$)"
+                  value={novoInsumo.preco_venda || ''}
+                  onChange={(e) => setNovoInsumo({ ...novoInsumo, preco_venda: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2 col-span-2"
+                >
+                  <Plus className="w-4 h-4" /> Salvar no Estoque
+                </button>
+              </div>
+            </form>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-neutral-300">
+                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                    <tr>
+                      <th className="p-3">Produto</th>
+                      <th className="p-3">Quantidade</th>
+                      <th className="p-3">Custo</th>
+                      <th className="p-3">Venda</th>
+                      <th className="p-3">Margem</th>
+                      <th className="p-3 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {insumos.map((item) => (
+                      <tr key={item.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
+                        <td className="p-3 font-bold text-white">{item.nome}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                              Number(item.quantidade) <= Number(item.minimo)
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                : 'bg-neutral-800 text-neutral-200'
+                            }`}
+                          >
+                            {item.quantidade} {item.unidade}
+                          </span>
+                        </td>
+                        <td className="p-3">R$ {Number(item.preco_custo).toFixed(2)}</td>
+                        <td className="p-3">R$ {Number(item.preco_venda).toFixed(2)}</td>
+                        <td className="p-3 text-emerald-400 font-bold">{item.margem_lucro}%</td>
+                        <td className="p-3 text-right space-x-2">
+                          <button
+                            onClick={() => handleAjustarEstoque(item.id, 1)}
+                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded-lg font-bold"
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => handleAjustarEstoque(item.id, -1)}
+                            className="bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded-lg font-bold"
+                          >
+                            -
+                          </button>
+                          <button
+                            onClick={() => handleExcluirInsumo(item.id)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FINANCEIRO */}
+        {abaAtiva === 'financeiro' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Fluxo de Caixa e Financeiro</h1>
+              <p className="text-sm text-neutral-400">Registre as entradas e saídas financeiras</p>
+            </div>
+
+            <form onSubmit={handleAdicionarFinanceiro} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="font-bold text-lg mb-2">Novo Lançamento</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="Descrição*"
+                  required
+                  value={novoFinanceiro.descricao || ''}
+                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, descricao: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <select
+                  value={novoFinanceiro.tipo || 'Entrada'}
+                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, tipo: e.target.value as 'Entrada' | 'Saída' })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                >
+                  <option value="Entrada">Entrada (+)</option>
+                  <option value="Saída">Saída (-)</option>
+                </select>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Valor (R$)*"
+                  required
+                  value={novoFinanceiro.valor || ''}
+                  onChange={(e) => setNovoFinanceiro({ ...novoFinanceiro, valor: Number(e.target.value) })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Lançar
+                </button>
+              </div>
+            </form>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-neutral-300">
+                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                    <tr>
+                      <th className="p-3">Data</th>
+                      <th className="p-3">Descrição</th>
+                      <th className="p-3">Tipo</th>
+                      <th className="p-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {financeiro.map((item) => (
+                      <tr key={item.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
+                        <td className="p-3 text-neutral-400">{item.data}</td>
+                        <td className="p-3 font-bold text-white">{item.descricao}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                              item.tipo === 'Entrada' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                            }`}
+                          >
+                            {item.tipo}
+                          </span>
+                        </td>
+                        <td
+                          className={`p-3 text-right font-bold ${
+                            item.tipo === 'Entrada' ? 'text-emerald-400' : 'text-red-400'
+                          }`}
+                        >
+                          {item.tipo === 'Entrada' ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* USUÁRIOS */}
+        {abaAtiva === 'usuarios' && (
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-2xl font-bold">Gestão de Usuários e Permissões</h1>
+              <p className="text-sm text-neutral-400">Controle de acessos dos funcionários</p>
+            </div>
+
+            <form onSubmit={handleAdicionarUsuario} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <h2 className="font-bold text-lg mb-2">Novo Usuário</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input
+                  type="text"
+                  placeholder="Nome do Funcionário*"
+                  required
+                  value={novoUsuario.nome || ''}
+                  onChange={(e) => setNovoUsuario({ ...novoUsuario, nome: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="email"
+                  placeholder="E-mail de Acesso*"
+                  required
+                  value={novoUsuario.email || ''}
+                  onChange={(e) => setNovoUsuario({ ...novoUsuario, email: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="password"
+                  placeholder="Senha*"
+                  required
+                  value={novoUsuario.senha || ''}
+                  onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Cargo (ex: Vendedor, Impressor)"
+                  value={novoUsuario.cargo || ''}
+                  onChange={(e) => setNovoUsuario({ ...novoUsuario, cargo: e.target.value })}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 mb-2">PERMISSÕES DE ACESSO</label>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { id: 'dashboard', label: 'Dashboard' },
+                    { id: 'pedidos', label: 'Pedidos / OS' },
+                    { id: 'clientes', label: 'Clientes' },
+                    { id: 'estoque', label: 'Estoque / Insumos' },
+                    { id: 'financeiro', label: 'Financeiro' },
+                    { id: 'usuarios', label: 'Usuários' }
+                  ].map((p) => {
+                    const marcado = (novoUsuario.permissoes || []).includes(p.id)
+                    return (
+                      <button
+                        type="button"
+                        key={p.id}
+                        onClick={() => togglePermissao(p.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                          marcado
+                            ? 'bg-amber-400/20 text-amber-400 border-amber-400/40'
+                            : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                        }`}
+                      >
+                        {p.label} {marcado ? '✓' : '+'}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Cadastrar Usuário
+              </button>
+            </form>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-neutral-300">
+                  <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
+                    <tr>
+                      <th className="p-3">Nome</th>
+                      <th className="p-3">E-mail</th>
+                      <th className="p-3">Cargo</th>
+                      <th className="p-3">Permissões</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usuarios.map((u) => (
+                      <tr key={u.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
+                        <td className="p-3 font-bold text-white">{u.nome}</td>
+                        <td className="p-3">{u.email}</td>
+                        <td className="p-3">{u.cargo}</td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1">
+                            {u.permissoes.map((p) => (
+                              <span key={p} className="bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded text-xs">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
 }
