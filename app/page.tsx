@@ -148,13 +148,14 @@ export default function ERPGrafica() {
     status: 'Ativo'
   })
 
-  // Formulário de novo Serviço
+  // Formulário de novo/editar Serviço
   const [novoServico, setNovoServico] = useState({
     nome: '',
     unidade: 'Unidade',
     valorVenda: '',
     status: 'Ativo' as 'Ativo' | 'Inativo'
   })
+  const [servicoEditandoId, setServicoEditandoId] = useState<string | null>(null)
 
   // Gerador de código automático (SERV-001, SERV-002...)
   const gerarProximoCodigoServico = () => {
@@ -162,19 +163,45 @@ export default function ERPGrafica() {
     return `SERV-${String(proximoNum).padStart(3, '0')}`
   }
 
-  const handleAdicionarServico = (e: React.FormEvent) => {
+  const handleIniciarEdicaoServico = (s: Servico) => {
+    setServicoEditandoId(s.id)
+    setNovoServico({
+      nome: s.nome,
+      unidade: s.unidade,
+      valorVenda: s.valorVenda.toString(),
+      status: s.status
+    })
+  }
+
+  const handleCancelarEdicaoServico = () => {
+    setServicoEditandoId(null)
+    setNovoServico({ nome: '', unidade: 'Unidade', valorVenda: '', status: 'Ativo' })
+  }
+
+  const handleSalvarServico = (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoServico.nome || !novoServico.valorVenda) return
 
-    const itemServico: Servico = {
-      id: gerarProximoCodigoServico(),
-      nome: novoServico.nome,
-      unidade: novoServico.unidade,
-      valorVenda: Number(novoServico.valorVenda),
-      status: novoServico.status
+    if (servicoEditandoId !== null) {
+      setServicos(servicos.map(s => s.id === servicoEditandoId ? {
+        ...s,
+        nome: novoServico.nome,
+        unidade: novoServico.unidade,
+        valorVenda: Number(novoServico.valorVenda),
+        status: novoServico.status
+      } : s))
+      setServicoEditandoId(null)
+    } else {
+      const itemServico: Servico = {
+        id: gerarProximoCodigoServico(),
+        nome: novoServico.nome,
+        unidade: novoServico.unidade,
+        valorVenda: Number(novoServico.valorVenda),
+        status: novoServico.status
+      }
+      setServicos([...servicos, itemServico])
     }
 
-    setServicos([...servicos, itemServico])
     setNovoServico({ nome: '', unidade: 'Unidade', valorVenda: '', status: 'Ativo' })
   }
 
@@ -594,9 +621,9 @@ export default function ERPGrafica() {
     if (confirm('Deseja excluir este usuário?')) {
       await supabase.from('usuarios').delete().eq('id', id)
     }
-    
   }
-const handleIniciarEdicaoUsuario = (u: Usuario) => {
+
+  const handleIniciarEdicaoUsuario = (u: Usuario) => {
     setUsuarioEditandoId(u.id)
     setNomeUsuario(u.nome)
     setSenhaUsuario(u.senha || '')
@@ -971,12 +998,10 @@ const handleIniciarEdicaoUsuario = (u: Usuario) => {
                       const val = e.target.value
                       setNovaOrdem((prev) => ({ ...prev, produto: val }))
                       
-                      // Tenta encontrar nos insumos/produtos ativos
                       const prodEncontrado = insumos.find((i) => i.nome.toLowerCase() === val.toLowerCase() && i.status !== 'Inativo')
                       if (prodEncontrado) {
                         setNovaOrdem((prev) => ({ ...prev, valor_unitario: prodEncontrado.preco_venda }))
                       } else {
-                        // Tenta encontrar nos serviços ativos
                         const servEncontrado = servicos.find((s) => s.nome.toLowerCase() === val.toLowerCase() && s.status === 'Ativo')
                         if (servEncontrado) {
                           setNovaOrdem((prev) => ({ ...prev, valor_unitario: servEncontrado.valorVenda }))
@@ -1379,15 +1404,17 @@ const handleIniciarEdicaoUsuario = (u: Usuario) => {
             {/* ABA 2: SERVIÇOS */}
             {abaCatalogo === 'servicos' && (
               <div className="space-y-6">
-                <form onSubmit={handleAdicionarServico} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h2 className="text-lg font-bold text-amber-400">Novo Serviço</h2>
+                <form onSubmit={handleSalvarServico} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h2 className="text-lg font-bold text-amber-400">
+                    {servicoEditandoId !== null ? `Editar Serviço (${servicoEditandoId})` : 'Novo Serviço'}
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">Código Automático</label>
+                      <label className="block text-xs text-neutral-400 mb-1">Código</label>
                       <input
                         type="text"
                         disabled
-                        value={gerarProximoCodigoServico()}
+                        value={servicoEditandoId !== null ? servicoEditandoId : gerarProximoCodigoServico()}
                         className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-amber-400 font-mono font-bold w-full"
                       />
                     </div>
@@ -1431,7 +1458,7 @@ const handleIniciarEdicaoUsuario = (u: Usuario) => {
                       />
                     </div>
                   </div>
-                  <div className="flex gap-4 items-center">
+                  <div className="flex gap-4 items-center justify-between pt-2">
                     <div className="w-48">
                       <label className="block text-xs text-neutral-400 mb-1">Status</label>
                       <select
@@ -1443,12 +1470,23 @@ const handleIniciarEdicaoUsuario = (u: Usuario) => {
                         <option value="Inativo">Inativo</option>
                       </select>
                     </div>
-                    <button
-                      type="submit"
-                      className="mt-5 bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
-                    >
-                      Cadastrar Serviço
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        type="submit"
+                        className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-3 rounded-xl transition text-sm shadow-lg shadow-amber-400/20"
+                      >
+                        {servicoEditandoId !== null ? 'Salvar Alterações' : 'Cadastrar Serviço'}
+                      </button>
+                      {servicoEditandoId !== null && (
+                        <button
+                          type="button"
+                          onClick={handleCancelarEdicaoServico}
+                          className="bg-neutral-800 text-white font-bold px-6 py-3 rounded-xl transition text-sm"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </form>
 
@@ -1478,7 +1516,14 @@ const handleIniciarEdicaoUsuario = (u: Usuario) => {
                                 {s.status}
                               </span>
                             </td>
-                            <td className="p-4 text-right">
+                            <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => handleIniciarEdicaoServico(s)}
+                                title="Editar Serviço"
+                                className="p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-amber-400 inline-flex items-center"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => {
                                   setServicos(servicos.map(item => item.id === s.id ? { ...item, status: item.status === 'Ativo' ? 'Inativo' : 'Ativo' } : item))
