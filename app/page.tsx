@@ -433,12 +433,11 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  // ==================== TELA DE LOGIN (FUNDO COM IMAGENS DA GRÁFICA + RELÓGIO/CALENDÁRIO) ====================
+  // ==================== TELA DE LOGIN ====================
   if (!usuarioAtual) {
     return (
       <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
         
-        {/* IMAGENS DE FUNDO COM TEMA DE GRÁFICA */}
         <div className="absolute inset-0 z-0 grid grid-cols-3 opacity-30 pointer-events-none filter blur-[1px]">
           <div className="relative h-full w-full overflow-hidden">
             <img
@@ -463,13 +462,10 @@ export default function ERPGrafica() {
           </div>
         </div>
 
-        {/* CAMADA DE ESCURECIMENTO SOBRE O FUNDO */}
         <div className="absolute inset-0 z-0 bg-neutral-950/80 backdrop-blur-sm" />
 
-        {/* CARD PRINCIPAL DE LOGIN */}
         <div className="relative z-10 bg-neutral-950/95 text-white border border-amber-500/40 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           
-          {/* LADO ESQUERDO: FORMULÁRIO DE LOGIN */}
           <div>
             <div className="text-center md:text-left mb-6">
               <div className="mb-4 flex items-center justify-center md:justify-start">
@@ -527,10 +523,8 @@ export default function ERPGrafica() {
             </form>
           </div>
 
-          {/* LADO DIREITO: RELÓGIO DIGITAL E CALENDÁRIO */}
           <div className="bg-neutral-900/90 p-6 rounded-2xl border border-neutral-800 flex flex-col justify-between space-y-6 shadow-inner">
             
-            {/* RELÓGIO DIGITAL EM TEMPO REAL */}
             <div className="bg-neutral-950 border border-amber-500/30 rounded-2xl p-5 text-center shadow-lg">
               <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
                 <Clock className="w-4 h-4 animate-pulse" /> Horário Oficial
@@ -543,7 +537,6 @@ export default function ERPGrafica() {
               </div>
             </div>
 
-            {/* CALENDÁRIO ELEGANTE */}
             <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 text-center shadow-lg">
               <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">
                 <CalendarIcon className="w-4 h-4" /> Calendário Operacional
