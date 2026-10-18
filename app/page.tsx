@@ -16,14 +16,15 @@ import {
   LogOut,
   Printer,
   Layers,
-  Palette
+  Palette,
+  Edit3
 } from 'lucide-react'
 
 // ==================== TIPOS DE DADOS ====================
 type Usuario = {
   id: number
   nome: string
-  email: string
+  email?: string
   senha?: string
   cargo: string
   permissoes: string[]
@@ -72,7 +73,7 @@ type FinanceiroItem = {
 export default function ERPGrafica() {
   // ==================== ESTADOS DE AUTENTICAÇÃO ====================
   const [usuarioAtual, setUsuarioAtual] = useState<Usuario | null>(null)
-  const [emailLogin, setEmailLogin] = useState('')
+  const [nomeLogin, setNomeLogin] = useState('')
   const [senhaLogin, setSenhaLogin] = useState('')
   const [erroLogin, setErroLogin] = useState('')
 
@@ -102,7 +103,13 @@ export default function ERPGrafica() {
   })
   const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({ status: 'Aberto' })
   const [novoFinanceiro, setNovoFinanceiro] = useState<Partial<FinanceiroItem>>({ tipo: 'Entrada' })
-  const [novoUsuario, setNovoUsuario] = useState<Partial<Usuario>>({ permissoes: ['dashboard'] })
+  
+  // USUÁRIOS
+  const [usuarioEditandoId, setUsuarioEditandoId] = useState<number | null>(null)
+  const [nomeUsuario, setNomeUsuario] = useState('')
+  const [senhaUsuario, setSenhaUsuario] = useState('')
+  const [cargoUsuario, setCargoUsuario] = useState('Operador')
+  const [permissoesUsuario, setPermissoesUsuario] = useState<string[]>(['dashboard'])
 
   // ==================== CARREGAMENTO E SINC. EM TEMPO REAL ====================
   useEffect(() => {
@@ -110,7 +117,9 @@ export default function ERPGrafica() {
 
     const channel = supabase
       .channel('erp-realtime-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, () => fetchUsuarios())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, (payload) => {
+        fetchUsuariosUpdateCurrent(payload)
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => fetchClientes())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'insumos' }, () => fetchInsumos())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens' }, () => fetchOrdens())
@@ -120,7 +129,7 @@ export default function ERPGrafica() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [usuarioAtual])
 
   const fetchTodosDados = async () => {
     setLoading(true)
@@ -137,6 +146,20 @@ export default function ERPGrafica() {
   const fetchUsuarios = async () => {
     const { data } = await supabase.from('usuarios').select('*').order('id', { ascending: true })
     if (data) setUsuarios(data)
+  }
+
+  // Atualiza a lista de usuários e também atualiza o usuário logado instantaneamente se ele for o editado
+  const fetchUsuariosUpdateCurrent = async (payload: any) => {
+    const { data } = await supabase.from('usuarios').select('*').order('id', { ascending: true })
+    if (data) {
+      setUsuarios(data)
+      if (usuarioAtual) {
+        const atualizado = data.find((u: Usuario) => u.id === usuarioAtual.id)
+        if (atualizado) {
+          setUsuarioAtual(atualizado)
+        }
+      }
+    }
   }
 
   const fetchClientes = async () => {
@@ -167,7 +190,7 @@ export default function ERPGrafica() {
     const { data } = await supabase
       .from('usuarios')
       .select('*')
-      .eq('email', emailLogin.trim())
+      .ilike('nome', nomeLogin.trim())
       .eq('senha', senhaLogin.trim())
       .single()
 
@@ -175,13 +198,13 @@ export default function ERPGrafica() {
       setUsuarioAtual(data)
       setAbaAtiva('dashboard')
     } else {
-      setErroLogin('E-mail ou senha incorretos.')
+      setErroLogin('Nome de usuário ou senha incorretos.')
     }
   }
 
   const handleLogout = () => {
     setUsuarioAtual(null)
-    setEmailLogin('')
+    setNomeLogin('')
     setSenhaLogin('')
   }
 
@@ -319,32 +342,69 @@ export default function ERPGrafica() {
   }
 
   // USUÁRIOS
-  const handleAdicionarUsuario = async (e: React.FormEvent) => {
+  const handleSalvarUsuario = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!novoUsuario.nome || !novoUsuario.email || !novoUsuario.senha) {
-      alert('Preencha nome, e-mail e senha do usuário!')
+    if (!nomeUsuario || !senhaUsuario) {
+      alert('Preencha o nome e a senha do usuário!')
       return
     }
 
-    const item = {
-      id: Date.now(),
-      nome: novoUsuario.nome,
-      email: novoUsuario.email,
-      senha: novoUsuario.senha,
-      cargo: novoUsuario.cargo || 'Operador',
-      permissoes: novoUsuario.permissoes || ['dashboard']
+    if (usuarioEditandoId !== null) {
+      await supabase
+        .from('usuarios')
+        .update({
+          nome: nomeUsuario,
+          senha: senhaUsuario,
+          cargo: cargoUsuario,
+          permissoes: permissoesUsuario
+        })
+        .eq('id', usuarioEditandoId)
+
+      setUsuarioEditandoId(null)
+    } else {
+      const item = {
+        id: Date.now(),
+        nome: nomeUsuario,
+        senha: senhaUsuario,
+        cargo: cargoUsuario,
+        permissoes: permissoesUsuario
+      }
+      await supabase.from('usuarios').insert([item])
     }
 
-    await supabase.from('usuarios').insert([item])
-    setNovoUsuario({ permissoes: ['dashboard'] })
+    setNomeUsuario('')
+    setSenhaUsuario('')
+    setCargoUsuario('Operador')
+    setPermissoesUsuario(['dashboard'])
+  }
+
+  const handleIniciarEdicaoUsuario = (u: Usuario) => {
+    setUsuarioEditandoId(u.id)
+    setNomeUsuario(u.nome)
+    setSenhaUsuario(u.senha || '')
+    setCargoUsuario(u.cargo || 'Operador')
+    setPermissoesUsuario(u.permissoes || ['dashboard'])
+  }
+
+  const handleCancelarEdicao = () => {
+    setUsuarioEditandoId(null)
+    setNomeUsuario('')
+    setSenhaUsuario('')
+    setCargoUsuario('Operador')
+    setPermissoesUsuario(['dashboard'])
+  }
+
+  const handleExcluirUsuario = async (id: number) => {
+    if (confirm('Deseja excluir este usuário?')) {
+      await supabase.from('usuarios').delete().eq('id', id)
+    }
   }
 
   const togglePermissao = (perm: string) => {
-    const perms = novoUsuario.permissoes || []
-    if (perms.includes(perm)) {
-      setNovoUsuario({ ...novoUsuario, permissoes: perms.filter((p) => p !== perm) })
+    if (permissoesUsuario.includes(perm)) {
+      setPermissoesUsuario(permissoesUsuario.filter((p) => p !== perm))
     } else {
-      setNovoUsuario({ ...novoUsuario, permissoes: [...perms, perm] })
+      setPermissoesUsuario([...permissoesUsuario, perm])
     }
   }
 
@@ -360,16 +420,14 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  // ==================== TELA DE LOGIN (AMARELO OURO - PT-BR) ====================
+  // ==================== TELA DE LOGIN ====================
   if (!usuarioAtual) {
     return (
       <div className="min-h-screen bg-amber-400 text-neutral-900 flex items-center justify-center p-4">
         <div className="bg-neutral-950 text-white border border-amber-500/30 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           
-          {/* LADO ESQUERDO: FORMULÁRIO COM LOGO */}
           <div>
             <div className="text-center md:text-left mb-6">
-              {/* LOGO DA EMPRESA */}
               <div className="mb-4 flex items-center justify-center md:justify-start">
                 <img
                   src="/logo.png"
@@ -393,13 +451,13 @@ export default function ERPGrafica() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1">E-MAIL</label>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1">NOME DE USUÁRIO</label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={emailLogin}
-                  onChange={(e) => setEmailLogin(e.target.value)}
-                  placeholder="usuario@igxgrafica.com"
+                  value={nomeLogin}
+                  onChange={(e) => setNomeLogin(e.target.value)}
+                  placeholder="Ex: Administrador"
                   className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition text-white"
                 />
               </div>
@@ -425,7 +483,6 @@ export default function ERPGrafica() {
             </form>
           </div>
 
-          {/* LADO DIREITO: IMAGENS DA GRÁFICA */}
           <div className="hidden md:flex flex-col gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
             <div className="relative h-40 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
               <img
@@ -477,7 +534,6 @@ export default function ERPGrafica() {
   // ==================== PAINEL PRINCIPAL DO ERP ====================
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col md:flex-row">
-      {/* SIDEBAR NAVEGAÇÃO */}
       <aside className="w-full md:w-64 bg-neutral-900 border-r border-neutral-800 p-6 flex flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
@@ -526,7 +582,6 @@ export default function ERPGrafica() {
           </nav>
         </div>
 
-        {/* PERFIL LOGADO */}
         <div className="pt-6 border-t border-neutral-800 mt-6">
           <div className="flex items-center justify-between">
             <div>
@@ -544,13 +599,11 @@ export default function ERPGrafica() {
         </div>
       </aside>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 p-6 md:p-10 overflow-y-auto">
         {loading && (
           <div className="text-xs text-amber-400 mb-4 animate-pulse">Sincronizando dados em tempo real...</div>
         )}
 
-        {/* DASHBOARD */}
         {abaAtiva === 'dashboard' && (
           <div className="space-y-8">
             <div>
@@ -602,7 +655,6 @@ export default function ERPGrafica() {
           </div>
         )}
 
-        {/* PEDIDOS / OS */}
         {abaAtiva === 'pedidos' && (
           <div className="space-y-8">
             <div>
@@ -698,7 +750,6 @@ export default function ERPGrafica() {
           </div>
         )}
 
-        {/* CLIENTES */}
         {abaAtiva === 'clientes' && (
           <div className="space-y-8">
             <div>
@@ -804,7 +855,6 @@ export default function ERPGrafica() {
           </div>
         )}
 
-        {/* ESTOQUE */}
         {abaAtiva === 'estoque' && (
           <div className="space-y-8">
             <div>
@@ -935,7 +985,6 @@ export default function ERPGrafica() {
           </div>
         )}
 
-        {/* FINANCEIRO */}
         {abaAtiva === 'financeiro' && (
           <div className="space-y-8">
             <div>
@@ -1021,52 +1070,57 @@ export default function ERPGrafica() {
           </div>
         )}
 
-        {/* USUÁRIOS */}
         {abaAtiva === 'usuarios' && (
           <div className="space-y-8">
             <div>
               <h1 className="text-2xl font-bold">Gestão de Usuários e Permissões</h1>
-              <p className="text-sm text-neutral-400">Controle de acessos dos funcionários</p>
+              <p className="text-sm text-neutral-400">Controle de acesso por Nome, Senha e Nível de Privilégio</p>
             </div>
 
-            <form onSubmit={handleAdicionarUsuario} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Novo Usuário</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <form onSubmit={handleSalvarUsuario} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="font-bold text-lg">
+                  {usuarioEditandoId !== null ? 'Editar Usuário / Redefinir Senha' : 'Cadastrar Novo Usuário'}
+                </h2>
+                {usuarioEditandoId !== null && (
+                  <button
+                    type="button"
+                    onClick={handleCancelarEdicao}
+                    className="text-xs text-neutral-400 hover:text-white underline"
+                  >
+                    Cancelar Edição
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input
                   type="text"
-                  placeholder="Nome do Funcionário*"
+                  placeholder="Nome de Usuário (Ex: Administrador)*"
                   required
-                  value={novoUsuario.nome || ''}
-                  onChange={(e) => setNovoUsuario({ ...novoUsuario, nome: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="email"
-                  placeholder="E-mail de Acesso*"
-                  required
-                  value={novoUsuario.email || ''}
-                  onChange={(e) => setNovoUsuario({ ...novoUsuario, email: e.target.value })}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
-                />
-                <input
-                  type="password"
-                  placeholder="Senha*"
-                  required
-                  value={novoUsuario.senha || ''}
-                  onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
+                  value={nomeUsuario}
+                  onChange={(e) => setNomeUsuario(e.target.value)}
                   className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
                 />
                 <input
                   type="text"
-                  placeholder="Cargo (ex: Vendedor, Impressor)"
-                  value={novoUsuario.cargo || ''}
-                  onChange={(e) => setNovoUsuario({ ...novoUsuario, cargo: e.target.value })}
+                  placeholder="Senha / Redefinir Senha*"
+                  required
+                  value={senhaUsuario}
+                  onChange={(e) => setSenhaUsuario(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Cargo / Nível (Ex: Administrador, Operador)"
+                  value={cargoUsuario}
+                  onChange={(e) => setCargoUsuario(e.target.value)}
                   className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-2">PERMISSÕES DE ACESSO</label>
+                <label className="block text-xs font-semibold text-neutral-400 mb-2">NÍVEL DE PRIVILÉGIO (PERMISSÕES DE ACESSO)</label>
                 <div className="flex flex-wrap gap-3">
                   {[
                     { id: 'dashboard', label: 'Dashboard' },
@@ -1076,7 +1130,7 @@ export default function ERPGrafica() {
                     { id: 'financeiro', label: 'Financeiro' },
                     { id: 'usuarios', label: 'Usuários' }
                   ].map((p) => {
-                    const marcado = (novoUsuario.permissoes || []).includes(p.id)
+                    const marcado = permissoesUsuario.includes(p.id)
                     return (
                       <button
                         type="button"
@@ -1095,12 +1149,23 @@ export default function ERPGrafica() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2 rounded-xl transition flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Cadastrar Usuário
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2.5 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> {usuarioEditandoId !== null ? 'Atualizar Usuário' : 'Cadastrar Usuário'}
+                </button>
+                {usuarioEditandoId !== null && (
+                  <button
+                    type="button"
+                    onClick={handleCancelarEdicao}
+                    className="bg-neutral-800 hover:bg-neutral-700 text-white font-bold px-6 py-2.5 rounded-xl transition"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </form>
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
@@ -1108,26 +1173,44 @@ export default function ERPGrafica() {
                 <table className="w-full text-left text-sm text-neutral-300">
                   <thead className="bg-neutral-950 text-neutral-400 font-semibold border-b border-neutral-800">
                     <tr>
-                      <th className="p-3">Nome</th>
-                      <th className="p-3">E-mail</th>
-                      <th className="p-3">Cargo</th>
+                      <th className="p-3">Nome de Usuário</th>
+                      <th className="p-3">Cargo / Nível</th>
                       <th className="p-3">Permissões</th>
+                      <th className="p-3 text-right">Ações (Editar / Excluir)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {usuarios.map((u) => (
                       <tr key={u.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                        <td className="p-3 font-bold text-white">{u.nome}</td>
-                        <td className="p-3">{u.email}</td>
-                        <td className="p-3">{u.cargo}</td>
+                        <td className="p-3 font-bold text-white flex items-center gap-2">
+                          <Users className="w-4 h-4 text-amber-400" />
+                          {u.nome}
+                        </td>
+                        <td className="p-3 font-medium text-amber-400">{u.cargo}</td>
                         <td className="p-3">
                           <div className="flex flex-wrap gap-1">
-                            {u.permissoes.map((p) => (
+                            {u.permissoes && u.permissoes.map((p) => (
                               <span key={p} className="bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded text-xs">
                                 {p}
                               </span>
                             ))}
                           </div>
+                        </td>
+                        <td className="p-3 text-right space-x-2">
+                          <button
+                            onClick={() => handleIniciarEdicaoUsuario(u)}
+                            className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold transition inline-flex items-center gap-1"
+                            title="Editar Dados ou Redefinir Senha"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button
+                            onClick={() => handleExcluirUsuario(u.id)}
+                            className="text-red-400 hover:text-red-300 p-1.5 inline-flex items-center"
+                            title="Excluir Usuário"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
