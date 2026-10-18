@@ -883,7 +883,7 @@ export default function ERPGrafica() {
         {abaAtiva === 'estoque' && (
           <div className="space-y-8">
             <div>
-              <h1 className="text-2xl font-bold">Controle de Estoque e Insumos</h1>
+              <h1 className="text-2xl font-bold">Controle de Estoque</h1>
               <p className="text-sm text-neutral-400">Gestão de materiais e papéis</p>
             </div>
 
