@@ -51,13 +51,21 @@ type Insumo = {
 
 type OrdemServico = {
   id: number
+  numero_pedido?: string
   cliente: string
   telefone_cliente?: string
   documento_cliente?: string
   produto: string
   detalhes: string
-  valor: number
-  status: 'Aberto' | 'Em Andamento' | 'Concluído'
+  quantidade: number
+  valor_unitario: number
+  desconto: number
+  frete: number
+  valor: number // Valor Total calculado
+  forma_pagamento: string
+  status_pagamento: 'Pago' | 'A pagar'
+  status_entrega: 'Entregue' | 'Agendado'
+  status: 'Em Aberto' | 'Em Andamento' | 'Finalizado'
   data: string
   data_pedido?: string
   data_entrega?: string
@@ -121,10 +129,23 @@ export default function ERPGrafica() {
   })
 
   const [novaOrdem, setNovaOrdem] = useState<Partial<OrdemServico>>({
-    status: 'Aberto',
+    status: 'Em Aberto',
+    status_pagamento: 'A pagar',
+    status_entrega: 'Agendado',
+    forma_pagamento: 'PIX',
+    quantidade: 1,
+    valor_unitario: 0,
+    desconto: 0,
+    frete: 0,
     data_pedido: new Date().toISOString().split('T')[0],
-    vendedor: usuarioAtual?.nome || ''
+    vendedor: ''
   })
+
+  useEffect(() => {
+    if (usuarioAtual && !novaOrdem.vendedor) {
+      setNovaOrdem((prev) => ({ ...prev, vendedor: usuarioAtual.nome }))
+    }
+  }, [usuarioAtual])
 
   const [novoFinanceiro, setNovoFinanceiro] = useState<Partial<FinanceiroItem>>({ tipo: 'Entrada' })
   
@@ -231,20 +252,26 @@ export default function ERPGrafica() {
   const handleClienteChange = (nomeClienteSelecionado: string) => {
     const clienteEncontrado = clientes.find((c) => c.nome === nomeClienteSelecionado)
     if (clienteEncontrado) {
-      setNovaOrdem({
-        ...novaOrdem,
+      setNovaOrdem((prev) => ({
+        ...prev,
         cliente: clienteEncontrado.nome,
         telefone_cliente: clienteEncontrado.telefone || '',
         documento_cliente: clienteEncontrado.cnpj || clienteEncontrado.rg || ''
-      })
+      }))
     } else {
-      setNovaOrdem({
-        ...novaOrdem,
+      setNovaOrdem((prev) => ({
+        ...prev,
         cliente: nomeClienteSelecionado,
         telefone_cliente: '',
         documento_cliente: ''
-      })
+      }))
     }
+  }
+
+  const calcularValorTotal = (qtd = novaOrdem.quantidade || 1, unit = novaOrdem.valor_unitario || 0, desc = novaOrdem.desconto || 0, frt = novaOrdem.frete || 0) => {
+    const subtotal = Number(qtd) * Number(unit)
+    const total = subtotal - Number(desc) + Number(frt)
+    return Math.max(0, total)
   }
 
   const handleAdicionarCliente = async (e: React.FormEvent) => {
@@ -317,20 +344,43 @@ export default function ERPGrafica() {
 
   const handleAdicionarOrdem = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!novaOrdem.cliente || !novaOrdem.produto || !novaOrdem.valor) {
+    if (!novaOrdem.cliente || !novaOrdem.produto || novaOrdem.valor_unitario === undefined) {
       alert('Preencha os campos obrigatórios do pedido!')
       return
     }
 
+    const agora = new Date()
+    const ano = agora.getFullYear()
+    const mes = String(agora.getMonth() + 1).padStart(2, '0')
+    const dia = String(agora.getDate()).padStart(2, '0')
+    const hora = String(agora.getHours()).padStart(2, '0')
+    const min = String(agora.getMinutes()).padStart(2, '0')
+    const seg = String(agora.getSeconds()).padStart(2, '0')
+    const numeroGerado = `PED-${ano}${mes}${dia}-${hora}${min}${seg}`
+
+    const qtd = Number(novaOrdem.quantidade || 1)
+    const unit = Number(novaOrdem.valor_unitario || 0)
+    const desc = Number(novaOrdem.desconto || 0)
+    const frt = Number(novaOrdem.frete || 0)
+    const valorTotalCalc = calcularValorTotal(qtd, unit, desc, frt)
+
     const item = {
       id: Date.now(),
+      numero_pedido: numeroGerado,
       cliente: novaOrdem.cliente,
       telefone_cliente: novaOrdem.telefone_cliente || '',
       documento_cliente: novaOrdem.documento_cliente || '',
       produto: novaOrdem.produto,
       detalhes: novaOrdem.detalhes || '',
-      valor: Number(novaOrdem.valor),
-      status: novaOrdem.status || 'Aberto',
+      quantidade: qtd,
+      valor_unitario: unit,
+      desconto: desc,
+      frete: frt,
+      valor: valorTotalCalc,
+      forma_pagamento: novaOrdem.forma_pagamento || 'PIX',
+      status_pagamento: novaOrdem.status_pagamento || 'A pagar',
+      status_entrega: novaOrdem.status_entrega || 'Agendado',
+      status: novaOrdem.status || 'Em Aberto',
       data: new Date().toLocaleDateString('pt-BR'),
       data_pedido: novaOrdem.data_pedido || new Date().toISOString().split('T')[0],
       data_entrega: novaOrdem.data_entrega || '',
@@ -338,40 +388,52 @@ export default function ERPGrafica() {
     }
 
     await supabase.from('ordens').insert([item])
+
+    if (item.status_pagamento === 'Pago') {
+      await supabase.from('financeiro').insert([
+        {
+          id: Date.now() + 1,
+          descricao: `Pedido ${numeroGerado} - ${item.cliente}`,
+          tipo: 'Entrada',
+          valor: valorTotalCalc,
+          data: new Date().toLocaleDateString('pt-BR')
+        }
+      ])
+    }
+
     setNovaOrdem({
-      status: 'Aberto',
+      status: 'Em Aberto',
+      status_pagamento: 'A pagar',
+      status_entrega: 'Agendado',
+      forma_pagamento: 'PIX',
+      quantidade: 1,
+      valor_unitario: 0,
+      desconto: 0,
+      frete: 0,
       data_pedido: new Date().toISOString().split('T')[0],
       vendedor: usuarioAtual?.nome || ''
     })
   }
 
-  const handleMudarStatusOrdem = async (id: number, novoStatus: 'Aberto' | 'Em Andamento' | 'Concluído') => {
+  const handleMudarStatusOrdem = async (id: number, novoStatus: 'Em Aberto' | 'Em Andamento' | 'Finalizado') => {
     const ordem = ordens.find((o) => o.id === id)
     if (!ordem) return
 
     await supabase.from('ordens').update({ status: novoStatus }).eq('id', id)
 
-    if (novoStatus === 'Concluído' && ordem.status !== 'Concluído') {
-      await supabase.from('financeiro').insert([
-        {
-          id: Date.now(),
-          descricao: `Pedido #${ordem.id} - ${ordem.cliente}`,
-          tipo: 'Entrada',
-          valor: ordem.valor,
-          data: new Date().toLocaleDateString('pt-BR')
-        }
-      ])
+    if (novoStatus === 'Finalizado' && ordem.status !== 'Finalizado' && ordem.status_pagamento === 'Pago') {
+      // Já está pago ou gerencia financeiro
     }
   }
 
   const handleImprimirOrdem = (ordem: OrdemServico) => {
-    const janelaImpressao = window.open('', '_blank', 'width=800,height=600')
+    const janelaImpressao = window.open('', '_blank', 'width=800,height=700')
     if (!janelaImpressao) return
 
     janelaImpressao.document.write(`
       <html>
         <head>
-          <title>Ordem de Serviço #${ordem.id} - IGX Gráfica</title>
+          <title>Pedido ${ordem.numero_pedido || '#' + ordem.id} - IGX Gráfica</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
             .header { border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
@@ -379,6 +441,9 @@ export default function ERPGrafica() {
             .info-box { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
             .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
             .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; paddingTop: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
+            th { background: #f1f1f1; }
           </style>
         </head>
         <body>
@@ -388,7 +453,7 @@ export default function ERPGrafica() {
               <div>Sistema de Gestão & Impressão</div>
             </div>
             <div style="text-align: right;">
-              <h2>ORDEM DE SERVIÇO / PEDIDO #${ordem.id}</h2>
+              <h2>PEDIDO / OS: ${ordem.numero_pedido || '#' + ordem.id}</h2>
               <div>Status: <b>${ordem.status}</b></div>
             </div>
           </div>
@@ -401,14 +466,33 @@ export default function ERPGrafica() {
           </div>
 
           <div class="info-box">
-            <h3>Detalhes do Pedido</h3>
-            <p><b>Produto / Serviço:</b> ${ordem.produto}</p>
-            <p><b>Especificações:</b> ${ordem.detalhes || 'Nenhuma observação informada.'}</p>
-            <div class="grid" style="margin-top: 10px;">
-              <p><b>Data do Pedido:</b> ${ordem.data_pedido || '-'}</p>
+            <h3>Detalhes do Produto e Valores</h3>
+            <table>
+              <tr>
+                <th>Produto / Serviço</th>
+                <th>Qtd</th>
+                <th>Vlr Unitário</th>
+                <th>Desconto</th>
+                <th>Frete</th>
+                <th>Total</th>
+              </tr>
+              <tr>
+                <td><b>${ordem.produto}</b><br><small>${ordem.detalhes || ''}</small></td>
+                <td>${ordem.quantidade || 1}</td>
+                <td>R$ ${Number(ordem.valor_unitario || 0).toFixed(2)}</td>
+                <td>R$ ${Number(ordem.desconto || 0).toFixed(2)}</td>
+                <td>R$ ${Number(ordem.frete || 0).toFixed(2)}</td>
+                <td><b>R$ ${Number(ordem.valor).toFixed(2)}</b></td>
+              </tr>
+            </table>
+
+            <div class="grid" style="margin-top: 15px;">
+              <p><b>Forma de Pagamento:</b> ${ordem.forma_pagamento || '-'}</p>
+              <p><b>Status Pagamento:</b> <span style="color: ${ordem.status_pagamento === 'Pago' ? 'green' : 'red'}; font-weight: bold;">${ordem.status_pagamento}</span></p>
+              <p><b>Status de Entrega:</b> ${ordem.status_entrega || '-'}</p>
               <p><b>Data de Entrega:</b> ${ordem.data_entrega || 'A combinar'}</p>
               <p><b>Vendedor:</b> ${ordem.vendedor || '-'}</p>
-              <p><b>Valor Total:</b> R$ ${Number(ordem.valor).toFixed(2)}</p>
+              <p><b>Data do Pedido:</b> ${ordem.data_pedido || '-'}</p>
             </div>
           </div>
 
@@ -753,7 +837,7 @@ export default function ERPGrafica() {
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                 <span className="text-xs text-neutral-400 font-semibold">PEDIDOS ATIVOS</span>
                 <p className="text-2xl font-black mt-2 text-amber-400">
-                  {ordens.filter((o) => o.status !== 'Concluído').length}
+                  {ordens.filter((o) => o.status !== 'Finalizado').length}
                 </p>
               </div>
 
@@ -785,12 +869,12 @@ export default function ERPGrafica() {
           <div className="space-y-8">
             <div>
               <h1 className="text-2xl font-bold">Ordens de Serviço e Pedidos</h1>
-              <p className="text-sm text-neutral-400">Gerencie os pedidos da gráfica com preenchimento automático de cliente e impressão</p>
+              <p className="text-sm text-neutral-400">Gestão completa de pedidos com numeração automática, cálculos e status</p>
             </div>
 
             <form onSubmit={handleAdicionarOrdem} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
               <h2 className="font-bold text-lg mb-2 text-amber-400">Cadastrar Novo Pedido / OS</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 mb-1">CLIENTE*</label>
@@ -798,9 +882,9 @@ export default function ERPGrafica() {
                     required
                     value={novaOrdem.cliente || ''}
                     onChange={(e) => handleClienteChange(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
                   >
-                    <option value="">Selecione um cliente cadastrado...</option>
+                    <option value="">Selecione o cliente...</option>
                     {clientes.map((c) => (
                       <option key={c.id} value={c.nome}>
                         {c.nome} {c.telefone ? `- ${c.telefone}` : ''}
@@ -814,9 +898,9 @@ export default function ERPGrafica() {
                   <input
                     type="text"
                     readOnly
-                    placeholder="Preenchido automaticamente"
+                    placeholder="Automático"
                     value={novaOrdem.telefone_cliente || ''}
-                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-400 cursor-not-allowed"
+                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-400 cursor-not-allowed"
                   />
                 </div>
 
@@ -825,9 +909,9 @@ export default function ERPGrafica() {
                   <input
                     type="text"
                     readOnly
-                    placeholder="Preenchido automaticamente"
+                    placeholder="Automático"
                     value={novaOrdem.documento_cliente || ''}
-                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-400 cursor-not-allowed"
+                    className="w-full bg-neutral-950/60 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-400 cursor-not-allowed"
                   />
                 </div>
 
@@ -835,12 +919,120 @@ export default function ERPGrafica() {
                   <label className="block text-xs font-semibold text-neutral-400 mb-1">PRODUTO / SERVIÇO*</label>
                   <input
                     type="text"
-                    placeholder="Ex: Cartões de Visita, Banner..."
+                    placeholder="Ex: Cartões de Visita"
                     required
                     value={novaOrdem.produto || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, produto: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">QUANTIDADE*</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={novaOrdem.quantidade ?? 1}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, quantidade: Number(e.target.value) })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR UNITÁRIO (R$)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={novaOrdem.valor_unitario ?? ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, valor_unitario: Number(e.target.value) })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">DESCONTO (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={novaOrdem.desconto ?? ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, desconto: Number(e.target.value) })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">FRETE (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={novaOrdem.frete ?? ''}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, frete: Number(e.target.value) })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR TOTAL (AUTO)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`R$ ${calcularValorTotal(novaOrdem.quantidade, novaOrdem.valor_unitario, novaOrdem.desconto, novaOrdem.frete).toFixed(2)}`}
+                    className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-sm text-emerald-400 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">FORMA DE PAGAMENTO</label>
+                  <select
+                    value={novaOrdem.forma_pagamento || 'PIX'}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, forma_pagamento: e.target.value })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  >
+                    <option value="À vista">À vista</option>
+                    <option value="Cartão Débito">Cartão Débito</option>
+                    <option value="Cartão Crédito">Cartão Crédito</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DE PAGAMENTO</label>
+                  <select
+                    value={novaOrdem.status_pagamento || 'A pagar'}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status_pagamento: e.target.value as 'Pago' | 'A pagar' })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  >
+                    <option value="A pagar">A pagar</option>
+                    <option value="Pago">Pago</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DE ENTREGA</label>
+                  <select
+                    value={novaOrdem.status_entrega || 'Agendado'}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status_entrega: e.target.value as 'Entregue' | 'Agendado' })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  >
+                    <option value="Agendado">Agendado</option>
+                    <option value="Entregue">Entregue</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">STATUS DO PEDIDO</label>
+                  <select
+                    value={novaOrdem.status || 'Em Aberto'}
+                    onChange={(e) => setNovaOrdem({ ...novaOrdem, status: e.target.value as 'Em Aberto' | 'Em Andamento' | 'Finalizado' })}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
+                  >
+                    <option value="Em Aberto">Em Aberto</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Finalizado">Finalizado</option>
+                  </select>
                 </div>
 
                 <div>
@@ -849,7 +1041,7 @@ export default function ERPGrafica() {
                     type="date"
                     value={novaOrdem.data_pedido || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, data_pedido: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
                   />
                 </div>
 
@@ -859,41 +1051,18 @@ export default function ERPGrafica() {
                     type="date"
                     value={novaOrdem.data_entrega || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, data_entrega: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">NOME DO VENDEDOR</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VENDEDOR</label>
                   <input
                     type="text"
-                    placeholder="Nome do atendente/vendedor"
                     value={novaOrdem.vendedor || ''}
                     onChange={(e) => setNovaOrdem({ ...novaOrdem, vendedor: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-400 text-white"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1">VALOR TOTAL (R$)*</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    required
-                    value={novaOrdem.valor || ''}
-                    onChange={(e) => setNovaOrdem({ ...novaOrdem, valor: Number(e.target.value) })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-white"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    type="submit"
-                    className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black px-6 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20"
-                  >
-                    <Plus className="w-4 h-4" /> Criar Pedido / OS
-                  </button>
                 </div>
 
               </div>
@@ -901,16 +1070,23 @@ export default function ERPGrafica() {
               <div>
                 <label className="block text-xs font-semibold text-neutral-400 mb-1">DETALHES / ESPECIFICAÇÕES TÉCNICAS</label>
                 <textarea
-                  placeholder="Medidas, tipo de papel, acabamento, cor, observações..."
+                  placeholder="Acabamento, tipo de papel, observações..."
                   value={novaOrdem.detalhes || ''}
                   onChange={(e) => setNovaOrdem({ ...novaOrdem, detalhes: e.target.value })}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-sm focus:outline-none focus:border-amber-400 text-white"
                 />
               </div>
+
+              <button
+                type="submit"
+                className="w-full bg-amber-400 hover:bg-amber-300 text-black font-black py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20"
+              >
+                <Plus className="w-4 h-4" /> Cadastrar Pedido com Numeração Automática
+              </button>
             </form>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(['Aberto', 'Em Andamento', 'Concluído'] as const).map((status) => (
+              {(['Em Aberto', 'Em Andamento', 'Finalizado'] as const).map((status) => (
                 <div key={status} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
                   <h3 className="font-bold text-sm tracking-wider uppercase mb-4 text-neutral-400 border-b border-neutral-800 pb-2">
                     {status} ({ordens.filter((o) => o.status === status).length})
@@ -922,7 +1098,7 @@ export default function ERPGrafica() {
                         <div key={ordem.id} className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 space-y-3 shadow-md">
                           <div className="flex justify-between items-start">
                             <div>
-                              <span className="text-xs text-amber-400 font-black">OS #{ordem.id}</span>
+                              <span className="text-xs text-amber-400 font-black">{ordem.numero_pedido || `OS #${ordem.id}`}</span>
                               <h4 className="font-bold text-white text-base">{ordem.cliente}</h4>
                             </div>
                             <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
@@ -931,10 +1107,10 @@ export default function ERPGrafica() {
                           </div>
 
                           <div className="text-xs space-y-1 text-neutral-300">
-                            <p><b>Produto:</b> {ordem.produto}</p>
-                            {ordem.telefone_cliente && <p><b>Tel:</b> {ordem.telefone_cliente}</p>}
+                            <p><b>Produto:</b> {ordem.produto} (Qtd: {ordem.quantidade || 1})</p>
+                            <p><b>Pagamento:</b> {ordem.forma_pagamento} • <span className={ordem.status_pagamento === 'Pago' ? 'text-emerald-400 font-bold' : 'text-amber-500 font-bold'}>{ordem.status_pagamento}</span></p>
+                            <p><b>Entrega:</b> <span className={ordem.status_entrega === 'Entregue' ? 'text-emerald-400 font-bold' : 'text-neutral-400'}>{ordem.status_entrega}</span> ({ordem.data_entrega || 'A combinar'})</p>
                             {ordem.vendedor && <p><b>Vendedor:</b> {ordem.vendedor}</p>}
-                            {ordem.data_entrega && <p><b>Entrega:</b> {ordem.data_entrega}</p>}
                             {ordem.detalhes && <p className="text-neutral-400 italic mt-1">{ordem.detalhes}</p>}
                           </div>
                           
@@ -942,23 +1118,23 @@ export default function ERPGrafica() {
                             <button
                               onClick={() => handleImprimirOrdem(ordem)}
                               className="bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-amber-400/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-                              title="Imprimir Ordem de Serviço em PDF"
+                              title="Imprimir Pedido em PDF"
                             >
                               <Printer className="w-3.5 h-3.5" /> Imprimir OS
                             </button>
 
                             <div className="flex items-center gap-2">
-                              {status !== 'Aberto' && (
+                              {status !== 'Em Aberto' && (
                                 <button
-                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Concluído' ? 'Em Andamento' : 'Aberto')}
+                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Finalizado' ? 'Em Andamento' : 'Em Aberto')}
                                   className="text-xs text-neutral-400 hover:text-white"
                                 >
                                   ←
                                 </button>
                               )}
-                              {status !== 'Concluído' && (
+                              {status !== 'Finalizado' && (
                                 <button
-                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Aberto' ? 'Em Andamento' : 'Concluído')}
+                                  onClick={() => handleMudarStatusOrdem(ordem.id, status === 'Em Aberto' ? 'Em Andamento' : 'Finalizado')}
                                   className="text-xs text-amber-400 hover:underline font-bold"
                                 >
                                   Avançar →
