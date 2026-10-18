@@ -818,36 +818,24 @@ export default function ERPGrafica() {
           <div className="space-y-8">
             <div>
               <h1 className="text-2xl font-bold">Painel de Controle</h1>
-              <p className="text-sm text-neutral-400">Visão geral em tempo real da sua gráfica</p>
+              <p className="text-sm text-neutral-400">Visão geral operacional e prazos da sua gráfica</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                <span className="text-xs text-neutral-400 font-semibold">SALDO EM CAIXA</span>
-                <p className={`text-2xl font-black mt-2 ${saldoTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  R$ {saldoTotal.toFixed(2)}
-                </p>
-              </div>
-
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                <span className="text-xs text-neutral-400 font-semibold">RECEITAS</span>
-                <p className="text-2xl font-black mt-2 text-emerald-400">R$ {totalEntradas.toFixed(2)}</p>
-              </div>
-
+            {/* Apenas contadores operacionais e alertas (sem valores financeiros) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                 <span className="text-xs text-neutral-400 font-semibold">PEDIDOS ATIVOS</span>
-                <p className="text-2xl font-black mt-2 text-amber-400">
+                <p className="text-3xl font-black mt-2 text-amber-400">
                   {ordens.filter((o) => o.status !== 'Finalizado').length}
                 </p>
               </div>
 
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                 <span className="text-xs text-neutral-400 font-semibold">ALERTAS DE ESTOQUE</span>
-                <p className="text-2xl font-black mt-2 text-amber-500">{alertasEstoque.length}</p>
+                <p className="text-3xl font-black mt-2 text-amber-500">{alertasEstoque.length}</p>
               </div>
             </div>
 
-            {/* Alertas de Estoque e Prazos de Entrega no Dashboard */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {/* Alertas de Estoque */}
@@ -1427,12 +1415,32 @@ export default function ERPGrafica() {
         {abaAtiva === 'financeiro' && (
           <div className="space-y-8">
             <div>
-              <h1 className="text-2xl font-bold">Fluxo de Caixa e Financeiro</h1>
-              <p className="text-sm text-neutral-400">Registre as entradas e saídas financeiras</p>
+              <h1 className="text-2xl font-bold">Dashboard Financeiro & Caixa</h1>
+              <p className="text-sm text-neutral-400">Área restrita de controle de receitas, despesas e saldo em caixa</p>
+            </div>
+
+            {/* Cards do Dashboard Financeiro com Saldo e Receitas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">SALDO EM CAIXA</span>
+                <p className={`text-2xl font-black mt-2 ${saldoTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  R$ {saldoTotal.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">TOTAL DE RECEITAS</span>
+                <p className="text-2xl font-black mt-2 text-emerald-400">R$ {totalEntradas.toFixed(2)}</p>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+                <span className="text-xs text-neutral-400 font-semibold">TOTAL DE SAÍDAS</span>
+                <p className="text-2xl font-black mt-2 text-red-400">R$ {totalSaidas.toFixed(2)}</p>
+              </div>
             </div>
 
             <form onSubmit={handleAdicionarFinanceiro} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <h2 className="font-bold text-lg mb-2">Novo Lançamento</h2>
+              <h2 className="font-bold text-lg mb-2">Novo Lançamento Financeiro</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input
                   type="text"
