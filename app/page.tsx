@@ -14,9 +14,8 @@ import {
   Trash2,
   Search,
   LogOut,
-  Printer,
-  Layers,
-  Palette,
+  Clock,
+  Calendar as CalendarIcon,
   Edit3
 } from 'lucide-react'
 
@@ -88,6 +87,28 @@ export default function ERPGrafica() {
   const [financeiro, setFinanceiro] = useState<FinanceiroItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  // ==================== RELÓGIO DIGITAL (LOGIN) ====================
+  const [horaAtual, setHoraAtual] = useState('')
+  const [dataAtual, setDataAtual] = useState('')
+
+  useEffect(() => {
+    const atualizarRelogio = () => {
+      const agora = new Date()
+      setHoraAtual(agora.toLocaleTimeString('pt-BR'))
+      setDataAtual(
+        agora.toLocaleDateString('pt-BR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      )
+    }
+    atualizarRelogio()
+    const timer = setInterval(atualizarRelogio, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   // ==================== FILTROS E PESQUISAS ====================
   const [buscaCliente, setBuscaCliente] = useState('')
 
@@ -148,7 +169,6 @@ export default function ERPGrafica() {
     if (data) setUsuarios(data)
   }
 
-  // Atualiza a lista de usuários e também atualiza o usuário logado instantaneamente se ele for o editado
   const fetchUsuariosUpdateCurrent = async (payload: any) => {
     const { data } = await supabase.from('usuarios').select('*').order('id', { ascending: true })
     if (data) {
@@ -209,8 +229,6 @@ export default function ERPGrafica() {
   }
 
   // ==================== AÇÕES CRUD (SUPABASE) ====================
-  
-  // CLIENTES
   const handleAdicionarCliente = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoCliente.nome || !novoCliente.telefone) {
@@ -239,7 +257,6 @@ export default function ERPGrafica() {
     }
   }
 
-  // INSUMOS / ESTOQUE
   const handleAdicionarInsumo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoInsumo.nome) {
@@ -280,7 +297,6 @@ export default function ERPGrafica() {
     }
   }
 
-  // ORDENS DE SERVIÇO / PEDIDOS
   const handleAdicionarOrdem = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novaOrdem.cliente || !novaOrdem.produto || !novaOrdem.valor) {
@@ -321,7 +337,6 @@ export default function ERPGrafica() {
     }
   }
 
-  // FINANCEIRO
   const handleAdicionarFinanceiro = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!novoFinanceiro.descricao || !novoFinanceiro.valor) {
@@ -341,7 +356,6 @@ export default function ERPGrafica() {
     setNovoFinanceiro({ tipo: 'Entrada' })
   }
 
-  // USUÁRIOS
   const handleSalvarUsuario = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nomeUsuario || !senhaUsuario) {
@@ -408,7 +422,6 @@ export default function ERPGrafica() {
     }
   }
 
-  // CÁLCULOS TOTAIS
   const totalEntradas = financeiro
     .filter((f) => f.tipo === 'Entrada')
     .reduce((acc, f) => acc + Number(f.valor), 0)
@@ -420,12 +433,43 @@ export default function ERPGrafica() {
   const saldoTotal = totalEntradas - totalSaidas
   const alertasEstoque = insumos.filter((i) => Number(i.quantidade) <= Number(i.minimo))
 
-  // ==================== TELA DE LOGIN ====================
+  // ==================== TELA DE LOGIN (FUNDO COM IMAGENS DA GRÁFICA + RELÓGIO/CALENDÁRIO) ====================
   if (!usuarioAtual) {
     return (
-      <div className="min-h-screen bg-amber-400 text-neutral-900 flex items-center justify-center p-4">
-        <div className="bg-neutral-950 text-white border border-amber-500/30 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+      <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+        
+        {/* IMAGENS DE FUNDO COM TEMA DE GRÁFICA */}
+        <div className="absolute inset-0 z-0 grid grid-cols-3 opacity-30 pointer-events-none filter blur-[1px]">
+          <div className="relative h-full w-full overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?auto=format&fit=crop&q=80&w=800"
+              alt="Impressão Gráfica"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="relative h-full w-full overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1572044162444-ad60f1284dea?auto=format&fit=crop&q=80&w=800"
+              alt="Rolos de Papel e Impressão"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="relative h-full w-full overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&q=80&w=800"
+              alt="Tintas e Acabamento"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        </div>
+
+        {/* CAMADA DE ESCURECIMENTO SOBRE O FUNDO */}
+        <div className="absolute inset-0 z-0 bg-neutral-950/80 backdrop-blur-sm" />
+
+        {/* CARD PRINCIPAL DE LOGIN */}
+        <div className="relative z-10 bg-neutral-950/95 text-white border border-amber-500/40 rounded-3xl p-8 max-w-4xl w-full shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           
+          {/* LADO ESQUERDO: FORMULÁRIO DE LOGIN */}
           <div>
             <div className="text-center md:text-left mb-6">
               <div className="mb-4 flex items-center justify-center md:justify-start">
@@ -483,47 +527,51 @@ export default function ERPGrafica() {
             </form>
           </div>
 
-          <div className="hidden md:flex flex-col gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
-            <div className="relative h-40 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
-              <img
-                src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_0"
-                alt="Maquinaria Offset e Impressão"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3">
-                <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
-                  <Printer className="w-4 h-4" /> Produção & Offset
-                </span>
+          {/* LADO DIREITO: RELÓGIO DIGITAL E CALENDÁRIO */}
+          <div className="bg-neutral-900/90 p-6 rounded-2xl border border-neutral-800 flex flex-col justify-between space-y-6 shadow-inner">
+            
+            {/* RELÓGIO DIGITAL EM TEMPO REAL */}
+            <div className="bg-neutral-950 border border-amber-500/30 rounded-2xl p-5 text-center shadow-lg">
+              <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
+                <Clock className="w-4 h-4 animate-pulse" /> Horário Oficial
+              </div>
+              <div className="text-4xl font-black text-white tracking-wider font-mono">
+                {horaAtual || '00:00:00'}
+              </div>
+              <div className="text-xs text-neutral-400 capitalize mt-1">
+                {dataAtual || 'Carregando data...'}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative h-28 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
-                <img
-                  src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_1"
-                  alt="Tintas CMYK"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-2 text-center">
-                  <span className="text-xs font-bold text-white flex items-center gap-1">
-                    <Palette className="w-3 h-3 text-amber-400" /> Qualidade CMYK
-                  </span>
-                </div>
+            {/* CALENDÁRIO ELEGANTE */}
+            <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-5 text-center shadow-lg">
+              <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">
+                <CalendarIcon className="w-4 h-4" /> Calendário Operacional
               </div>
-
-              <div className="relative h-28 rounded-xl overflow-hidden border border-neutral-800 shadow-md">
-                <img
-                  src="http://googleusercontent.com/image_collection/image_retrieval/1270404648916990269_2"
-                  alt="Acabamento e Papel"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-2 text-center">
-                  <span className="text-xs font-bold text-white flex items-center gap-1">
-                    <Layers className="w-3 h-3 text-amber-400" /> Acabamento
-                  </span>
-                </div>
+              <div className="grid grid-cols-7 gap-1 text-xs">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((dia, idx) => (
+                  <span key={idx} className="font-bold text-neutral-500 py-1">{dia}</span>
+                ))}
+                {Array.from({ length: 31 }, (_, i) => {
+                  const diaNum = i + 1
+                  const hoje = new Date().getDate()
+                  const isHoje = diaNum === hoje
+                  return (
+                    <div
+                      key={i}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition ${
+                        isHoje
+                          ? 'bg-amber-400 text-black font-black shadow-md'
+                          : 'text-neutral-300 hover:bg-neutral-900'
+                      }`}
+                    >
+                      {diaNum}
+                    </div>
+                  )
+                })}
               </div>
             </div>
+
           </div>
 
         </div>
@@ -1160,7 +1208,7 @@ export default function ERPGrafica() {
                   <button
                     type="button"
                     onClick={handleCancelarEdicao}
-                    className="bg-neutral-800 hover:bg-neutral-700 text-white font-bold px-6 py-2.5 rounded-xl transition"
+                    className="bg-neutral-950 hover:bg-neutral-800 text-white font-bold px-6 py-2.5 rounded-xl transition border border-neutral-800"
                   >
                     Cancelar
                   </button>
